@@ -5,7 +5,7 @@ description = "if_addrs sys crate"
 license = "MIT OR BSD-3-Clause"
 links = "ifaddrs"
 name = "if-addrs-sys"
-repository = "https://github.com/messense/get_if_addrs"
+repository = "https://github.com/messense/if-addrs"
 version = "0.2.0"
 
 [lib]

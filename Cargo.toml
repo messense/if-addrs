@@ -4,7 +4,7 @@ description = "Return interface IP addresses on Posix and windows systems"
 license = "MIT OR BSD-3-Clause"
 name = "if-addrs"
 readme = "README.md"
-repository = "https://github.com/messense/get_if_addrs"
+repository = "https://github.com/messense/if-addrs"
 version = "0.6.0"
 edition = "2018"
 
