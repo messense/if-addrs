@@ -10,7 +10,9 @@
 use libc::{self, c_char, c_int, c_ulong, c_void, size_t};
 use std::ffi::CStr;
 use std::{io, ptr};
-use winapi::{DWORD, ERROR_SUCCESS, SOCKADDR};
+use winapi::shared::minwindef::DWORD;
+use winapi::shared::winerror::ERROR_SUCCESS;
+use winapi::shared::ws2def::SOCKADDR;
 
 #[repr(C)]
 pub struct SocketAddress {

@@ -1,0 +1,18 @@
+[package]
+authors = ["MaidSafe Developers <dev@maidsafe.net>"]
+build = "build.rs"
+description = "if_addrs sys crate"
+license = "MIT OR BSD-3-Clause"
+links = "ifaddrs"
+name = "if-addrs-sys"
+repository = "https://github.com/messense/get_if_addrs"
+version = "0.2.0"
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+libc = "0.2"
+
+[build-dependencies]
+cc = "1.0"

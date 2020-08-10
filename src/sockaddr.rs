@@ -12,7 +12,10 @@ use libc::{sockaddr, sockaddr_in, sockaddr_in6, AF_INET, AF_INET6};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::ptr::NonNull;
 #[cfg(windows)]
-use winapi::{sockaddr_in6, AF_INET, AF_INET6, SOCKADDR as sockaddr, SOCKADDR_IN as sockaddr_in};
+use winapi::{
+    shared::ws2ipdef::SOCKADDR_IN6 as sockaddr_in6,
+    winapi::shared::ws2def::{AF_INET, AF_INET, SOCKADDR as sockaddr, SOCKADDR_IN as sockaddr_in},
+};
 
 pub fn to_ipaddr(sockaddr: *const sockaddr) -> Option<IpAddr> {
     if sockaddr.is_null() {

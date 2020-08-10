@@ -1,25 +1,22 @@
 [package]
 authors = ["MaidSafe Developers <dev@maidsafe.net>"]
 description = "Return interface IP addresses on Posix and windows systems"
-documentation = "https://docs.rs/get_if_addrs"
-homepage = "http://maidsafe.net"
 license = "MIT OR BSD-3-Clause"
-name = "get_if_addrs"
+name = "if-addrs"
 readme = "README.md"
-repository = "https://github.com/maidsafe/get_if_addrs"
-version = "0.5.3"
+repository = "https://github.com/messense/get_if_addrs"
+version = "0.6.0"
 edition = "2018"
 
 [dependencies]
-clippy = {version = "~0.0.175", optional = true}
-libc = "~0.2.34"
+libc = "0.2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-winapi = "0.2"
+winapi = "0.3"
 
-[target.'cfg(target_os = "android")'.dependencies.get_if_addrs-sys]
-version = "~0.1.1"
-path = "get_if_addrs-sys"
+[target.'cfg(target_os = "android")'.dependencies.if-addrs-sys]
+version = "0.2"
+path = "if-addrs-sys"
 
 [dev-dependencies]
-unwrap = "~1.2.0"
+unwrap = "1.2.0"

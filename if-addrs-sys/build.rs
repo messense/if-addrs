@@ -7,12 +7,10 @@
 // specific language governing permissions and limitations relating to use of the SAFE Network
 // Software.
 
-extern crate gcc;
-
 use std::env;
 
 fn main() {
-    let mut cfg = gcc::Build::new();
+    let mut cfg = cc::Build::new();
     if env::var("TARGET").unwrap().contains("android") {
         cfg.include("native")
             .file("native/ifaddrs.c")

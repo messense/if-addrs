@@ -13,7 +13,7 @@
 // https://github.com/maidsafe/QA/blob/master/Documentation/Rust%20Lint%20Checks.md
 #![forbid(
     bad_style,
-    exceeding_bitshifts,
+    arithmetic_overflow,
     mutable_transmutes,
     no_mangle_const_items,
     unknown_crate_types,
@@ -25,7 +25,6 @@
     missing_docs,
     non_shorthand_field_patterns,
     overflowing_literals,
-    plugin_as_library,
     stable_features,
     unconditional_recursion,
     unknown_lints,
@@ -56,10 +55,10 @@
 #![cfg_attr(feature = "clippy", plugin(clippy))]
 #![cfg_attr(feature = "clippy", deny(clippy, clippy_pedantic))]
 
-use get_if_addrs;
+use if_addrs;
 
 fn main() {
-    let ifaces = get_if_addrs::get_if_addrs().unwrap();
+    let ifaces = if_addrs::get_if_addrs().unwrap();
     println!("Got list of interfaces");
     println!("{:#?}", ifaces);
 }

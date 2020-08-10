@@ -7,15 +7,6 @@
 // specific language governing permissions and limitations relating to use of the SAFE Network
 // Software.
 
-//! get_if_addrs-sys
-#![doc(
-    html_logo_url = "https://raw.githubusercontent.com/maidsafe/QA/master/Images/
-maidsafe_logo.png",
-    html_favicon_url = "http://maidsafe.net/img/favicon.ico",
-    html_root_url = "http://maidsafe.github.io/get_if_addrs"
-)]
-// For explanation of lint checks, run `rustc -W help` or see
-// https://github.com/maidsafe/QA/blob/master/Documentation/Rust%20Lint%20Checks.md
 #![forbid(
     exceeding_bitshifts, mutable_transmutes, no_mangle_const_items, unknown_crate_types, warnings
 )]
@@ -33,11 +24,6 @@ maidsafe_logo.png",
     box_pointers, missing_copy_implementations, missing_debug_implementations,
     variant_size_differences
 )]
-#![cfg_attr(
-    feature = "cargo-clippy",
-    deny(clippy, unicode_not_nfc, wrong_pub_self_convention, option_unwrap_used)
-)]
-#![cfg_attr(feature = "cargo-clippy", allow(use_debug, too_many_arguments))]
 #![cfg(target_os = "android")]
 extern crate libc;
 

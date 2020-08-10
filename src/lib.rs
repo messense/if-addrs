@@ -7,31 +7,17 @@
 // specific language governing permissions and limitations relating to use of the SAFE Network
 // Software.
 
-//! get_if_addrs
-
-#![doc(
-    html_logo_url = "https://raw.githubusercontent.com/maidsafe/QA/master/Images/
-maidsafe_logo.png",
-    html_favicon_url = "http://maidsafe.net/img/favicon.ico",
-    test(attr(forbid(warnings)))
-)]
-// For explanation of lint checks, run `rustc -W help` or see
-// https://github.com/maidsafe/QA/blob/master/Documentation/Rust%20Lint%20Checks.md
 #![forbid(
-    exceeding_bitshifts,
+    arithmetic_overflow,
     mutable_transmutes,
     no_mangle_const_items,
     unknown_crate_types,
-    warnings
 )]
 #![deny(
     bad_style,
-    deprecated,
     improper_ctypes,
-    missing_docs,
     non_shorthand_field_patterns,
     overflowing_literals,
-    plugin_as_library,
     stable_features,
     unconditional_recursion,
     unknown_lints,
@@ -78,7 +64,7 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 #[macro_use]
 extern crate unwrap;
 #[cfg(target_os = "android")]
-extern crate get_if_addrs_sys;
+extern crate if_addrs_sys;
 
 /// Details about an interface on this host.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -386,7 +372,6 @@ pub fn get_if_addrs() -> io::Result<Vec<Interface>> {
 #[cfg(test)]
 mod tests {
     use super::{get_if_addrs, Interface};
-    use std::error::Error;
     use std::io::Read;
     use std::net::{IpAddr, Ipv4Addr};
     use std::process::{Command, Stdio};
@@ -402,7 +387,7 @@ mod tests {
         };
         let mut process = match start_cmd {
             Err(why) => {
-                println!("couldn't start cmd {} : {}", cmd, why.description());
+                println!("couldn't start cmd {} : {}", cmd, why.to_string());
                 return "".to_string();
             }
             Ok(process) => process,
