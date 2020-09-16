@@ -14,7 +14,7 @@ use std::ptr::NonNull;
 #[cfg(windows)]
 use winapi::{
     shared::ws2ipdef::SOCKADDR_IN6 as sockaddr_in6,
-    winapi::shared::ws2def::{AF_INET, AF_INET, SOCKADDR as sockaddr, SOCKADDR_IN as sockaddr_in},
+    shared::ws2def::{AF_INET, AF_INET6, SOCKADDR as sockaddr, SOCKADDR_IN as sockaddr_in},
 };
 
 pub fn to_ipaddr(sockaddr: *const sockaddr) -> Option<IpAddr> {
