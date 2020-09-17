@@ -7,45 +7,6 @@
 // specific language governing permissions and limitations relating to use of the SAFE Network
 // Software.
 
-#![forbid(mutable_transmutes, no_mangle_const_items, unknown_crate_types)]
-#![deny(
-    bad_style,
-    improper_ctypes,
-    non_shorthand_field_patterns,
-    overflowing_literals,
-    stable_features,
-    unconditional_recursion,
-    unknown_lints,
-    unused,
-    unused_allocation,
-    unused_attributes,
-    unused_comparisons,
-    unused_features,
-    unused_parens,
-    while_true
-)]
-#![warn(
-    trivial_casts,
-    trivial_numeric_casts,
-    unused_extern_crates,
-    unused_import_braces,
-    unused_qualifications,
-    unused_results
-)]
-#![allow(
-    box_pointers,
-    missing_copy_implementations,
-    missing_debug_implementations,
-    variant_size_differences
-)]
-#![deny(
-    clippy::all,
-    clippy::unicode_not_nfc,
-    clippy::wrong_pub_self_convention,
-    clippy::option_unwrap_used
-)]
-#![allow(clippy::use_debug, clippy::too_many_arguments)]
-
 #[cfg(not(windows))]
 mod ifaddrs_posix;
 #[cfg(windows)]
@@ -252,11 +213,6 @@ mod getifaddrs_windows {
                                     {
                                         let x_byte = ipv4_addr.octets()[n];
                                         let y_byte = a.octets()[n];
-                                        // Clippy 0.0.128 doesn't handle the label on the `continue`
-                                        #[cfg_attr(
-                                            feature = "cargo-clippy",
-                                            allow(needless_continue)
-                                        )]
                                         for m in 0..8 {
                                             if (n * 8) + m > prefix.prefix_length as usize {
                                                 break;
@@ -310,11 +266,6 @@ mod getifaddrs_windows {
                                     {
                                         let x_word = ipv6_addr.segments()[n];
                                         let y_word = a.segments()[n];
-                                        // Clippy 0.0.128 doesn't handle the label on the `continue`
-                                        #[cfg_attr(
-                                            feature = "cargo-clippy",
-                                            allow(needless_continue)
-                                        )]
                                         for m in 0..16 {
                                             if (n * 16) + m > prefix.prefix_length as usize {
                                                 break;
