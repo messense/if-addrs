@@ -7,12 +7,7 @@
 // specific language governing permissions and limitations relating to use of the SAFE Network
 // Software.
 
-#![forbid(
-    arithmetic_overflow,
-    mutable_transmutes,
-    no_mangle_const_items,
-    unknown_crate_types
-)]
+#![forbid(mutable_transmutes, no_mangle_const_items, unknown_crate_types)]
 #![deny(
     bad_style,
     improper_ctypes,
@@ -62,8 +57,6 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 #[cfg(test)]
 #[macro_use]
 extern crate unwrap;
-#[cfg(target_os = "android")]
-extern crate if_addrs_sys;
 
 /// Details about an interface on this host.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]

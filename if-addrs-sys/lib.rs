@@ -18,12 +18,8 @@
     bad_style,
     deprecated,
     improper_ctypes,
-    missing_docs,
     non_shorthand_field_patterns,
     overflowing_literals,
-    plugin_as_library,
-    private_no_mangle_fns,
-    private_no_mangle_statics,
     stable_features,
     unconditional_recursion,
     unknown_lints,
@@ -53,11 +49,10 @@
 #![cfg(target_os = "android")]
 extern crate libc;
 
-use libc::*;
+use libc::{c_char, c_int, c_uint, c_void, sockaddr};
 
-#[allow(missing_docs)]
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct ifaddrs {
     pub ifa_next: *mut ifaddrs,
     pub ifa_name: *mut c_char,
