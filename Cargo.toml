@@ -5,7 +5,7 @@ license = "MIT OR BSD-3-Clause"
 name = "if-addrs"
 readme = "README.md"
 repository = "https://github.com/messense/if-addrs"
-version = "0.6.1"
+version = "0.6.2"
 edition = "2018"
 
 [dependencies]
@@ -16,7 +16,7 @@ winapi = { version = "0.3", features = ["minwindef", "winerror", "ws2def", "ws2i
 
 # getifaddrs/freeifaddrs requires Android API >= 24, use a custom C version here to support old versions
 [target.'cfg(target_os = "android")'.dependencies.if-addrs-sys]
-version = "0.2"
+version = "0.3"
 path = "if-addrs-sys"
 
 [dev-dependencies]
