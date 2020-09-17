@@ -1,5 +1,8 @@
 # if-addrs - Change Log
 
+## [0.6.1]
+- Fixed Windows build issue after `winapi 0.3` upgrade
+
 ## [0.6.0] - forked from get_if_addrs
 - Rename to if-addrs
 - Replace `gcc` crate with `cc` crate
