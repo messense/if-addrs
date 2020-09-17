@@ -13,8 +13,8 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::ptr::NonNull;
 #[cfg(windows)]
 use winapi::{
+    shared::ws2def::{AF_INET, AF_INET6, SOCKADDR as sockaddr, SOCKADDR_IN as sockaddr_in},
     shared::ws2ipdef::SOCKADDR_IN6 as sockaddr_in6,
-    winapi::shared::ws2def::{AF_INET, AF_INET, SOCKADDR as sockaddr, SOCKADDR_IN as sockaddr_in},
 };
 
 pub fn to_ipaddr(sockaddr: *const sockaddr) -> Option<IpAddr> {
@@ -59,23 +59,25 @@ impl SockAddr {
     fn as_ipaddr(&self) -> Option<IpAddr> {
         match self.sockaddr_in() {
             Some(SockAddrIn::In(sa)) => {
+                let s_addr = unsafe { sa.sin_addr.S_un.S_addr() };
                 // Ignore all 169.254.x.x addresses as these are not active interfaces
-                if sa.sin_addr.S_un & 65535 == 0xfea9 {
+                if s_addr & 65535 == 0xfea9 {
                     return None;
                 }
                 Some(IpAddr::V4(Ipv4Addr::new(
-                    ((sa.sin_addr.S_un >> 0) & 255) as u8,
-                    ((sa.sin_addr.S_un >> 8) & 255) as u8,
-                    ((sa.sin_addr.S_un >> 16) & 255) as u8,
-                    ((sa.sin_addr.S_un >> 24) & 255) as u8,
+                    ((s_addr >> 0) & 255) as u8,
+                    ((s_addr >> 8) & 255) as u8,
+                    ((s_addr >> 16) & 255) as u8,
+                    ((s_addr >> 24) & 255) as u8,
                 )))
             }
             Some(SockAddrIn::In6(sa)) => {
+                let s6_addr = unsafe { sa.sin6_addr.u.Byte() };
                 // Ignore all fe80:: addresses as these are link locals
-                if sa.sin6_addr.s6_addr[0] == 0xfe && sa.sin6_addr.s6_addr[1] == 0x80 {
+                if s6_addr[0] == 0xfe && s6_addr[1] == 0x80 {
                     return None;
                 }
-                Some(IpAddr::V6(Ipv6Addr::from(sa.sin6_addr.s6_addr)))
+                Some(IpAddr::V6(Ipv6Addr::from(s6_addr.clone())))
             }
             None => None,
         }
