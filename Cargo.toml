@@ -1,5 +1,5 @@
 [package]
-authors = ["MaidSafe Developers <dev@maidsafe.net>"]
+authors = ["MaidSafe Developers <dev@maidsafe.net>", "Messense Lv <messense@icloud.com>"]
 description = "Return interface IP addresses on Posix and windows systems"
 license = "MIT OR BSD-3-Clause"
 name = "if-addrs"

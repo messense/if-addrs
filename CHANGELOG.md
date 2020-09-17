@@ -1,4 +1,9 @@
-# get_if_addrs - Change Log
+# if-addrs - Change Log
+
+## [0.6.0] - forked from get_if_addrs
+- Rename to if-addrs
+- Replace `gcc` crate with `cc` crate
+- Upgrade `winapi` crate to 0.3
 
 ## [0.5.3]
 - Update dependency version of get_if_addrs-sys to 0.1.1
