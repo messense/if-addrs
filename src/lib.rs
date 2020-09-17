@@ -21,7 +21,6 @@
     stable_features,
     unconditional_recursion,
     unknown_lints,
-    unsafe_code,
     unused,
     unused_allocation,
     unused_attributes,
