@@ -8,10 +8,10 @@
 // Software.
 
 #[cfg(not(windows))]
-mod ifaddrs_posix;
-#[cfg(windows)]
-mod ifaddrs_windows;
+mod posix;
 mod sockaddr;
+#[cfg(windows)]
+mod windows;
 
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -106,7 +106,7 @@ impl Ifv6Addr {
 #[cfg(not(windows))]
 mod getifaddrs_posix {
     use super::{IfAddr, Ifv4Addr, Ifv6Addr, Interface};
-    use crate::ifaddrs_posix::{self as ifaddrs, IfAddrs};
+    use crate::posix::{self as ifaddrs, IfAddrs};
     use crate::sockaddr;
     use std::ffi::CStr;
     use std::io;
@@ -182,8 +182,8 @@ pub fn get_if_addrs() -> io::Result<Vec<Interface>> {
 #[cfg(windows)]
 mod getifaddrs_windows {
     use super::{IfAddr, Ifv4Addr, Ifv6Addr, Interface};
-    use crate::ifaddrs_windows::IfAddrs;
     use crate::sockaddr;
+    use crate::windows::IfAddrs;
     use std::io;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
