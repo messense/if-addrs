@@ -38,16 +38,16 @@ pub struct IfAddrs {
 impl IfAddrs {
     #[allow(unsafe_code, clippy::new_ret_no_self)]
     pub fn new() -> io::Result<Self> {
-        let mut ifaddrs: *mut ifaddrs;
+        let mut ifaddrs = mem::MaybeUninit::uninit();
 
         unsafe {
-            ifaddrs = mem::uninitialized();
-            if -1 == getifaddrs(&mut ifaddrs) {
+            if -1 == getifaddrs(ifaddrs.as_mut_ptr()) {
                 return Err(io::Error::last_os_error());
             }
+            Ok(Self {
+                inner: ifaddrs.assume_init(),
+            })
         }
-
-        Ok(Self { inner: ifaddrs })
     }
 
     pub fn iter(&self) -> IfAddrsIterator {
