@@ -1,5 +1,14 @@
 # if-addrs - Change Log
 
+## [0.6.4]
+- Support Rust 1.40.0
+
+## [0.6.3]
+- Fix Android build with Rust 2018 edition
+
+## [0.6.2]
+- Fix Android build and add CI check
+
 ## [0.6.1]
 - Fixed Windows build issue after `winapi 0.3` upgrade
 
