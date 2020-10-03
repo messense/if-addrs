@@ -65,10 +65,10 @@ impl SockAddr {
                     return None;
                 }
                 Some(IpAddr::V4(Ipv4Addr::new(
-                    ((s_addr >> 0) & 255) as u8,
-                    ((s_addr >> 8) & 255) as u8,
-                    ((s_addr >> 16) & 255) as u8,
-                    ((s_addr >> 24) & 255) as u8,
+                    ((s_addr >> 0) & 255u32) as u8,
+                    ((s_addr >> 8) & 255u32) as u8,
+                    ((s_addr >> 16) & 255u32) as u8,
+                    ((s_addr >> 24) & 255u32) as u8,
                 )))
             }
             Some(SockAddrIn::In6(sa)) => {
