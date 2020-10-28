@@ -7,7 +7,7 @@ license = "MIT OR BSD-3-Clause"
 links = "ifaddrs"
 name = "if-addrs-sys"
 repository = "https://github.com/messense/if-addrs"
-version = "0.3.1"
+version = "0.3.2"
 
 [lib]
 path = "lib.rs"
