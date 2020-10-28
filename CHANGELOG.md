@@ -1,5 +1,8 @@
 # if-addrs - Change Log
 
+## [0.6.5]
+- Drop `unwrap` dev dependency
+
 ## [0.6.4]
 - Support Rust 1.40.0
 
