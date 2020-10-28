@@ -15,9 +15,6 @@ mod windows;
 
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-#[cfg(test)]
-#[macro_use]
-extern crate unwrap;
 
 /// Details about an interface on this host.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -337,11 +334,13 @@ mod tests {
         };
         thread::sleep(Duration::from_millis(1000));
         let _ = process.kill();
-        let result: Vec<u8> = unwrap!(process.stdout)
+        let result: Vec<u8> = process
+            .stdout
+            .unwrap()
             .bytes()
-            .map(|x| unwrap!(x))
+            .map(|x| x.unwrap())
             .collect();
-        unwrap!(String::from_utf8(result))
+        String::from_utf8(result).unwrap()
     }
 
     #[cfg(windows)]
@@ -354,9 +353,9 @@ mod tests {
                 if line.contains("Address") && !line.contains("Link-local") {
                     let addr_s: Vec<&str> = line.split(" : ").collect();
                     if line.contains("IPv6") {
-                        return Some(IpAddr::V6(unwrap!(Ipv6Addr::from_str(addr_s[1]))));
+                        return Some(IpAddr::V6(Ipv6Addr::from_str(addr_s[1]).unwrap()));
                     } else if line.contains("IPv4") {
-                        return Some(IpAddr::V4(unwrap!(Ipv4Addr::from_str(addr_s[1]))));
+                        return Some(IpAddr::V4(Ipv4Addr::from_str(addr_s[1]).unwrap()));
                     }
                 }
                 None
@@ -373,7 +372,7 @@ mod tests {
                 if line.contains("inet ") {
                     let addr_s: Vec<&str> = line.split_whitespace().collect();
                     let addr: Vec<&str> = addr_s[1].split('/').collect();
-                    return Some(IpAddr::V4(unwrap!(Ipv4Addr::from_str(addr[0]))));
+                    return Some(IpAddr::V4(Ipv4Addr::from_str(addr[0]).unwrap()));
                 }
                 None
             })
@@ -388,7 +387,7 @@ mod tests {
                 println!("{}", line);
                 if line.contains("inet ") {
                     let addr_s: Vec<&str> = line.split_whitespace().collect();
-                    return Some(IpAddr::V4(unwrap!(Ipv4Addr::from_str(addr_s[1]))));
+                    return Some(IpAddr::V4(Ipv4Addr::from_str(addr_s[1]).unwrap()));
                 }
                 None
             })
@@ -397,7 +396,7 @@ mod tests {
 
     #[test]
     fn test_get_if_addrs() {
-        let ifaces = unwrap!(get_if_addrs());
+        let ifaces = get_if_addrs().unwrap();
         println!("Local interfaces:");
         println!("{:#?}", ifaces);
         // at least one loop back address

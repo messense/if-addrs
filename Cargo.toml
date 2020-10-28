@@ -18,6 +18,3 @@ winapi = { version = "0.3", features = ["minwindef", "winerror", "ws2def", "ws2i
 [target.'cfg(target_os = "android")'.dependencies.if-addrs-sys]
 version = "0.3"
 path = "if-addrs-sys"
-
-[dev-dependencies]
-unwrap = "1.2.0"
