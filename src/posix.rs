@@ -22,6 +22,7 @@ pub fn do_broadcast(ifaddr: &ifaddrs) -> Option<IpAddr> {
 
 #[cfg(any(
     target_os = "freebsd",
+    target_os = "illumos",
     target_os = "ios",
     target_os = "macos",
     target_os = "openbsd",
