@@ -1,5 +1,11 @@
 # if-addrs - Change Log
 
+## [0.6.7]
+- Add support for haiku
+
+## [0.6.6]
+- Add support for illumos
+
 ## [0.6.5]
 - Drop `unwrap` dev dependency
 
