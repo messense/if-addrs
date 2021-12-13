@@ -8,9 +8,6 @@
 // Software.
 
 use crate::sockaddr;
-#[cfg(target_os = "android")]
-use if_addrs_sys::{freeifaddrs, getifaddrs, ifaddrs};
-#[cfg(not(target_os = "android"))]
 use libc::{freeifaddrs, getifaddrs, ifaddrs};
 use std::net::IpAddr;
 use std::{io, mem};
