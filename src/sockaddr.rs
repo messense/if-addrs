@@ -12,9 +12,11 @@ use libc::{sockaddr, sockaddr_in, sockaddr_in6, AF_INET, AF_INET6};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::ptr::NonNull;
 #[cfg(windows)]
-use winapi::{
-    shared::ws2def::{AF_INET, AF_INET6, SOCKADDR as sockaddr, SOCKADDR_IN as sockaddr_in},
-    shared::ws2ipdef::SOCKADDR_IN6 as sockaddr_in6,
+use windows_sys::{
+    Win32::NetworkManagement::IpHelper::{AF_INET, AF_INET6},
+    Win32::Networking::WinSock::{
+        SOCKADDR as sockaddr, SOCKADDR_IN as sockaddr_in, SOCKADDR_IN6 as sockaddr_in6,
+    },
 };
 
 pub fn to_ipaddr(sockaddr: *const sockaddr) -> Option<IpAddr> {
@@ -59,7 +61,7 @@ impl SockAddr {
     fn as_ipaddr(&self) -> Option<IpAddr> {
         match self.sockaddr_in() {
             Some(SockAddrIn::In(sa)) => {
-                let s_addr = unsafe { sa.sin_addr.S_un.S_addr() };
+                let s_addr = unsafe { sa.sin_addr.S_un.S_addr };
                 // Ignore all 169.254.x.x addresses as these are not active interfaces
                 if s_addr & 65535 == 0xfea9 {
                     return None;
@@ -72,7 +74,7 @@ impl SockAddr {
                 )))
             }
             Some(SockAddrIn::In6(sa)) => {
-                let s6_addr = unsafe { sa.sin6_addr.u.Byte() };
+                let s6_addr = unsafe { sa.sin6_addr.u.Byte };
                 // Ignore all fe80:: addresses as these are link locals
                 if s6_addr[0] == 0xfe && s6_addr[1] == 0x80 {
                     return None;
