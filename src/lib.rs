@@ -214,7 +214,7 @@ mod getifaddrs_windows {
                                             if (n * 8) + m > prefix.prefix_length as usize {
                                                 break;
                                             }
-                                            let bit = 1 << m;
+                                            let bit = 1 << (7 - m);
                                             if (x_byte & bit) == (y_byte & bit) {
                                                 *netmask_elt |= bit;
                                             } else {
@@ -267,7 +267,7 @@ mod getifaddrs_windows {
                                             if (n * 16) + m > prefix.prefix_length as usize {
                                                 break;
                                             }
-                                            let bit = 1 << m;
+                                            let bit = 1 << (15 - m);
                                             if (x_word & bit) == (y_word & bit) {
                                                 *netmask_elt |= bit;
                                             } else {
