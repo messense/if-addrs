@@ -183,6 +183,7 @@ mod getifaddrs_windows {
     use crate::windows::IfAddrs;
     use std::io;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+    use windows_sys::Win32::Networking::WinSock::IpDadStatePreferred;
 
     /// Return a vector of IP details for all the valid interfaces on this host.
     pub fn get_if_addrs() -> io::Result<Vec<Interface>> {
@@ -191,6 +192,9 @@ mod getifaddrs_windows {
 
         for ifaddr in ifaddrs.iter() {
             for addr in ifaddr.unicast_addresses() {
+                if addr.dadstate != IpDadStatePreferred {
+                    continue;
+                }
                 let addr = match sockaddr::to_ipaddr(addr.address.lp_socket_address) {
                     None => continue,
                     Some(IpAddr::V4(ipv4_addr)) => {

@@ -10,6 +10,7 @@
 use libc::{self, c_char, c_int, c_ulong, c_void, size_t};
 use std::ffi::CStr;
 use std::{io, ptr};
+use windows_sys::Win32::Networking::WinSock::{NL_DAD_STATE, NL_PREFIX_ORIGIN, NL_SUFFIX_ORIGIN};
 use windows_sys::{Win32::Foundation::ERROR_SUCCESS, Win32::Networking::WinSock::SOCKADDR};
 
 type DWORD = c_ulong;
@@ -19,13 +20,21 @@ pub struct SocketAddress {
     pub lp_socket_address: *const SOCKADDR,
     pub i_socket_address_length: c_int,
 }
+
 #[repr(C)]
 pub struct IpAdapterUnicastAddress {
     pub length: c_ulong,
     pub flags: DWORD,
     pub next: *const IpAdapterUnicastAddress,
-    // Loads more follows, but I'm not bothering to map these for now
     pub address: SocketAddress,
+    pub prefixorigin: NL_PREFIX_ORIGIN,
+    pub suffixorigin: NL_SUFFIX_ORIGIN,
+    pub dadstate: NL_DAD_STATE,
+    // Loads more follows, but I'm not bothering to map these for now
+    // ULONG                                 ValidLifetime;
+    // ULONG                                 PreferredLifetime;
+    // ULONG                                 LeaseLifetime;
+    // UINT8                                 OnLinkPrefixLength;
 }
 #[repr(C)]
 pub struct IpAdapterPrefix {
