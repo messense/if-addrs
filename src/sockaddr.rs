@@ -38,12 +38,10 @@ impl SockAddr {
     #[cfg(not(windows))]
     fn as_ipaddr(&self) -> Option<IpAddr> {
         match self.sockaddr_in() {
-            Some(SockAddrIn::In(sa)) => Some(IpAddr::V4(Ipv4Addr::new(
-                ((sa.sin_addr.s_addr) & 255) as u8,
-                ((sa.sin_addr.s_addr >> 8) & 255) as u8,
-                ((sa.sin_addr.s_addr >> 16) & 255) as u8,
-                ((sa.sin_addr.s_addr >> 24) & 255) as u8,
-            ))),
+            Some(SockAddrIn::In(sa)) => {
+                let b = sa.sin_addr.s_addr.to_ne_bytes();
+                Some(IpAddr::V4(Ipv4Addr::new(b[0], b[1], b[2], b[3])))
+            },
             Some(SockAddrIn::In6(sa)) => {
                 // Ignore all fe80:: addresses as these are link locals
                 if sa.sin6_addr.s6_addr[0] == 0xfe && sa.sin6_addr.s6_addr[1] == 0x80 {
@@ -64,12 +62,8 @@ impl SockAddr {
                 if s_addr & 65535 == 0xfea9 {
                     return None;
                 }
-                Some(IpAddr::V4(Ipv4Addr::new(
-                    ((s_addr >> 0) & 255u32) as u8,
-                    ((s_addr >> 8) & 255u32) as u8,
-                    ((s_addr >> 16) & 255u32) as u8,
-                    ((s_addr >> 24) & 255u32) as u8,
-                )))
+                let b = s_addr.to_ne_bytes();
+                Some(IpAddr::V4(Ipv4Addr::new(b[0], b[1], b[2], b[3])))
             }
             Some(SockAddrIn::In6(sa)) => {
                 let s6_addr = unsafe { sa.sin6_addr.u.Byte };
