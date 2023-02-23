@@ -41,7 +41,7 @@ impl SockAddr {
             Some(SockAddrIn::In(sa)) => {
                 let b = sa.sin_addr.s_addr.to_ne_bytes();
                 Some(IpAddr::V4(Ipv4Addr::new(b[0], b[1], b[2], b[3])))
-            },
+            }
             Some(SockAddrIn::In6(sa)) => {
                 // Ignore all fe80:: addresses as these are link locals
                 if sa.sin6_addr.s6_addr[0] == 0xfe && sa.sin6_addr.s6_addr[1] == 0x80 {
