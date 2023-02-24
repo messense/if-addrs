@@ -31,6 +31,11 @@ impl Interface {
         self.addr.is_loopback()
     }
 
+    /// Check whether this is a link local interface.
+    pub fn is_link_local(&self) -> bool {
+        self.addr.is_link_local()
+    }
+
     /// Get the IP address of this interface.
     pub fn ip(&self) -> IpAddr {
         self.addr.ip()
@@ -52,6 +57,14 @@ impl IfAddr {
         match *self {
             IfAddr::V4(ref ifv4_addr) => ifv4_addr.is_loopback(),
             IfAddr::V6(ref ifv6_addr) => ifv6_addr.is_loopback(),
+        }
+    }
+
+    /// Check whether this is a link local interface.
+    pub fn is_link_local(&self) -> bool {
+        match *self {
+            IfAddr::V4(ref ifv4_addr) => ifv4_addr.is_link_local(),
+            IfAddr::V6(ref ifv6_addr) => ifv6_addr.is_link_local(),
         }
     }
 
@@ -80,6 +93,11 @@ impl Ifv4Addr {
     pub fn is_loopback(&self) -> bool {
         self.ip.octets()[0] == 127
     }
+
+    /// Check whether this is a link local address.
+    pub fn is_link_local(&self) -> bool {
+        self.ip.is_link_local()
+    }
 }
 
 /// Details about the ipv6 address of an interface on this host.
@@ -97,6 +115,13 @@ impl Ifv6Addr {
     /// Check whether this is a loopback address.
     pub fn is_loopback(&self) -> bool {
         self.ip.segments() == [0, 0, 0, 0, 0, 0, 0, 1]
+    }
+
+    /// Check whether this is a link local address.
+    pub fn is_link_local(&self) -> bool {
+        let bytes = self.ip.octets();
+
+        bytes[0] == 0xfe && bytes[1] == 0x80
     }
 }
 

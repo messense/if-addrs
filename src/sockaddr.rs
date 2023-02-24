@@ -44,6 +44,7 @@ impl SockAddr {
             }
             Some(SockAddrIn::In6(sa)) => {
                 // Ignore all fe80:: addresses as these are link locals
+                #[cfg(not(feature = "link-local"))]
                 if sa.sin6_addr.s6_addr[0] == 0xfe && sa.sin6_addr.s6_addr[1] == 0x80 {
                     return None;
                 }
@@ -59,6 +60,7 @@ impl SockAddr {
             Some(SockAddrIn::In(sa)) => {
                 let s_addr = unsafe { sa.sin_addr.S_un.S_addr };
                 // Ignore all 169.254.x.x addresses as these are not active interfaces
+                #[cfg(not(feature = "link-local"))]
                 if s_addr & 65535 == 0xfea9 {
                     return None;
                 }
@@ -68,6 +70,7 @@ impl SockAddr {
             Some(SockAddrIn::In6(sa)) => {
                 let s6_addr = unsafe { sa.sin6_addr.u.Byte };
                 // Ignore all fe80:: addresses as these are link locals
+                #[cfg(not(feature = "link-local"))]
                 if s6_addr[0] == 0xfe && s6_addr[1] == 0x80 {
                     return None;
                 }
