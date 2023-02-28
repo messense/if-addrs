@@ -337,10 +337,14 @@ mod getifaddrs_windows {
                     }
                 };
 
+                let index = match addr {
+                    IfAddr::V4(_) => ifaddr.ipv4_index(),
+                    IfAddr::V6(_) => ifaddr.ipv6_index(),
+                };
                 ret.push(Interface {
                     name: ifaddr.name(),
                     addr,
-                    index: ifaddr.index(),
+                    index,
                 });
             }
         }
