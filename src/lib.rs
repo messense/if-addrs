@@ -479,7 +479,6 @@ mod tests {
                     listed = true;
                 }
 
-                #[cfg(not(windows))]
                 assert!(interface.index.is_some());
             }
             assert!(listed);
