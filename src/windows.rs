@@ -7,7 +7,6 @@
 // specific language governing permissions and limitations relating to use of the SAFE Network
 // Software.
 
-use libc::{self, c_ulong, c_void, size_t};
 use std::ffi::CStr;
 use std::{io, ptr};
 use windows_sys::Win32::Foundation::{ERROR_BUFFER_OVERFLOW, ERROR_SUCCESS};
@@ -15,6 +14,9 @@ use windows_sys::Win32::NetworkManagement::IpHelper::{
     GetAdaptersAddresses, GAA_FLAG_INCLUDE_PREFIX, GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER,
     GAA_FLAG_SKIP_FRIENDLY_NAME, GAA_FLAG_SKIP_MULTICAST, IP_ADAPTER_ADDRESSES_LH,
     IP_ADAPTER_PREFIX_XP, IP_ADAPTER_UNICAST_ADDRESS_LH,
+};
+use windows_sys::Win32::System::Memory::{
+    GetProcessHeap, HeapAlloc, HeapFree, HEAP_NONE, HEAP_ZERO_MEMORY,
 };
 
 #[repr(transparent)]
@@ -68,12 +70,13 @@ pub struct IfAddrs {
 impl IfAddrs {
     #[allow(unsafe_code)]
     pub fn new() -> io::Result<Self> {
-        let mut buffersize: c_ulong = 15000;
+        let mut buffersize = 15000;
         let mut ifaddrs: *mut IP_ADAPTER_ADDRESSES_LH;
 
         loop {
             unsafe {
-                ifaddrs = libc::malloc(buffersize as size_t) as *mut IP_ADAPTER_ADDRESSES_LH;
+                ifaddrs = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, buffersize as _)
+                    as *mut IP_ADAPTER_ADDRESSES_LH;
                 if ifaddrs.is_null() {
                     panic!("Failed to allocate buffer in get_if_addrs()");
                 }
@@ -93,12 +96,12 @@ impl IfAddrs {
                 match retcode {
                     ERROR_SUCCESS => break,
                     ERROR_BUFFER_OVERFLOW => {
-                        libc::free(ifaddrs as *mut c_void);
+                        HeapFree(GetProcessHeap(), HEAP_NONE, ifaddrs as _);
                         buffersize *= 2;
                         continue;
                     }
                     _ => {
-                        libc::free(ifaddrs as *mut c_void);
+                        HeapFree(GetProcessHeap(), HEAP_NONE, ifaddrs as _);
                         return Err(io::Error::last_os_error());
                     }
                 }
@@ -122,7 +125,7 @@ impl Drop for IfAddrs {
     #[allow(unsafe_code)]
     fn drop(&mut self) {
         unsafe {
-            libc::free(self.inner.0 as *mut c_void);
+            HeapFree(GetProcessHeap(), HEAP_NONE, self.inner.0 as _);
         }
     }
 }
