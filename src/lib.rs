@@ -233,10 +233,10 @@ mod getifaddrs_windows {
 
         for ifaddr in ifaddrs.iter() {
             for addr in ifaddr.unicast_addresses() {
-                if addr.dadstate != IpDadStatePreferred {
+                if addr.DadState != IpDadStatePreferred {
                     continue;
                 }
-                let addr = match sockaddr::to_ipaddr(addr.address.lp_socket_address) {
+                let addr = match sockaddr::to_ipaddr(addr.Address.lpSockaddr) {
                     None => continue,
                     Some(IpAddr::V4(ipv4_addr)) => {
                         let mut item_netmask = Ipv4Addr::new(0, 0, 0, 0);
@@ -244,19 +244,19 @@ mod getifaddrs_windows {
 
                         // Search prefixes for a prefix matching addr
                         'prefixloopv4: for prefix in ifaddr.prefixes() {
-                            let ipprefix = sockaddr::to_ipaddr(prefix.address.lp_socket_address);
+                            let ipprefix = sockaddr::to_ipaddr(prefix.Address.lpSockaddr);
                             match ipprefix {
                                 Some(IpAddr::V4(ref a)) => {
                                     let mut netmask: [u8; 4] = [0; 4];
                                     for (n, netmask_elt) in netmask
                                         .iter_mut()
                                         .enumerate()
-                                        .take((prefix.prefix_length as usize + 7) / 8)
+                                        .take((prefix.PrefixLength as usize + 7) / 8)
                                     {
                                         let x_byte = ipv4_addr.octets()[n];
                                         let y_byte = a.octets()[n];
                                         for m in 0..8 {
-                                            if (n * 8) + m > prefix.prefix_length as usize {
+                                            if (n * 8) + m > prefix.PrefixLength as usize {
                                                 break;
                                             }
                                             let bit = 1 << (7 - m);
@@ -295,7 +295,7 @@ mod getifaddrs_windows {
                         let mut item_netmask = Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0);
                         // Search prefixes for a prefix matching addr
                         'prefixloopv6: for prefix in ifaddr.prefixes() {
-                            let ipprefix = sockaddr::to_ipaddr(prefix.address.lp_socket_address);
+                            let ipprefix = sockaddr::to_ipaddr(prefix.Address.lpSockaddr);
                             match ipprefix {
                                 Some(IpAddr::V6(ref a)) => {
                                     // Iterate the bits in the prefix, if they all match this prefix
@@ -304,12 +304,12 @@ mod getifaddrs_windows {
                                     for (n, netmask_elt) in netmask
                                         .iter_mut()
                                         .enumerate()
-                                        .take((prefix.prefix_length as usize + 15) / 16)
+                                        .take((prefix.PrefixLength as usize + 15) / 16)
                                     {
                                         let x_word = ipv6_addr.segments()[n];
                                         let y_word = a.segments()[n];
                                         for m in 0..16 {
-                                            if (n * 16) + m > prefix.prefix_length as usize {
+                                            if (n * 16) + m > prefix.PrefixLength as usize {
                                                 break;
                                             }
                                             let bit = 1 << (15 - m);

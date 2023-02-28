@@ -7,120 +7,55 @@
 // specific language governing permissions and limitations relating to use of the SAFE Network
 // Software.
 
-use libc::{self, c_char, c_int, c_ulong, c_void, size_t};
+use libc::{self, c_ulong, c_void, size_t};
 use std::ffi::CStr;
 use std::{io, ptr};
+use windows_sys::Win32::Foundation::{ERROR_BUFFER_OVERFLOW, ERROR_SUCCESS};
 use windows_sys::Win32::NetworkManagement::IpHelper::{
-    GAA_FLAG_INCLUDE_PREFIX, GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER,
-    GAA_FLAG_SKIP_FRIENDLY_NAME, GAA_FLAG_SKIP_MULTICAST,
+    GetAdaptersAddresses, GAA_FLAG_INCLUDE_PREFIX, GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER,
+    GAA_FLAG_SKIP_FRIENDLY_NAME, GAA_FLAG_SKIP_MULTICAST, IP_ADAPTER_ADDRESSES_LH,
+    IP_ADAPTER_PREFIX_XP, IP_ADAPTER_UNICAST_ADDRESS_LH,
 };
-use windows_sys::Win32::Networking::WinSock::{NL_DAD_STATE, NL_PREFIX_ORIGIN, NL_SUFFIX_ORIGIN};
-use windows_sys::{Win32::Foundation::ERROR_SUCCESS, Win32::Networking::WinSock::SOCKADDR};
 
-type DWORD = c_ulong;
-
-#[repr(C)]
-pub struct SocketAddress {
-    pub lp_socket_address: *const SOCKADDR,
-    pub i_socket_address_length: c_int,
-}
-
-#[repr(C)]
-pub struct IpAdapterUnicastAddress {
-    pub length: c_ulong,
-    pub flags: DWORD,
-    pub next: *const IpAdapterUnicastAddress,
-    pub address: SocketAddress,
-    pub prefixorigin: NL_PREFIX_ORIGIN,
-    pub suffixorigin: NL_SUFFIX_ORIGIN,
-    pub dadstate: NL_DAD_STATE,
-    // Loads more follows, but I'm not bothering to map these for now
-    // ULONG                                 ValidLifetime;
-    // ULONG                                 PreferredLifetime;
-    // ULONG                                 LeaseLifetime;
-    // UINT8                                 OnLinkPrefixLength;
-}
-#[repr(C)]
-pub struct IpAdapterPrefix {
-    pub length: c_ulong,
-    pub flags: DWORD,
-    pub next: *const IpAdapterPrefix,
-    pub address: SocketAddress,
-    pub prefix_length: c_ulong,
-}
-#[repr(C)]
-pub struct IpAdapterAddresses {
-    pub length: c_ulong,
-    pub if_index: DWORD,
-    next: *const IpAdapterAddresses,
-    adapter_name: *const c_char,
-    first_unicast_address: *const IpAdapterUnicastAddress,
-    first_anycast_address: *const c_void,
-    first_multicast_address: *const c_void,
-    first_dns_server_address: *const c_void,
-    dns_suffix: *const c_void,
-    description: *const c_void,
-    friendly_name: *const c_void,
-    physical_address: [c_char; 8],
-    physical_address_length: DWORD,
-    flags: DWORD,
-    mtu: DWORD,
-    if_type: DWORD,
-    oper_status: c_int,
-    ipv6_if_index: DWORD,
-    zone_indices: [DWORD; 16],
-    // Loads more follows, but I'm not bothering to map these for now
-    first_prefix: *const IpAdapterPrefix,
-}
+#[repr(transparent)]
+pub struct IpAdapterAddresses(*const IP_ADAPTER_ADDRESSES_LH);
 
 impl IpAdapterAddresses {
     #[allow(unsafe_code)]
     pub fn name(&self) -> String {
-        unsafe { CStr::from_ptr(self.adapter_name) }
+        unsafe { CStr::from_ptr((*self.0).AdapterName as _) }
             .to_string_lossy()
             .into_owned()
     }
 
     pub fn prefixes(&self) -> PrefixesIterator {
         PrefixesIterator {
-            _head: self,
-            next: self.first_prefix,
+            _head: unsafe { &*self.0 },
+            next: unsafe { (*self.0).FirstPrefix },
         }
     }
 
     pub fn unicast_addresses(&self) -> UnicastAddressesIterator {
         UnicastAddressesIterator {
-            _head: self,
-            next: self.first_unicast_address,
+            _head: unsafe { &*self.0 },
+            next: unsafe { (*self.0).FirstUnicastAddress },
         }
     }
 }
 
-#[link(name = "iphlpapi")]
-extern "system" {
-    /// Get adapter's addresses.
-    fn GetAdaptersAddresses(
-        family: c_ulong,
-        flags: c_ulong,
-        reserved: *const c_void,
-        addresses: *const IpAdapterAddresses,
-        size: *mut c_ulong,
-    ) -> c_ulong;
-}
-
 pub struct IfAddrs {
-    inner: *const IpAdapterAddresses,
+    inner: IpAdapterAddresses,
 }
 
 impl IfAddrs {
     #[allow(unsafe_code)]
     pub fn new() -> io::Result<Self> {
         let mut buffersize: c_ulong = 15000;
-        let mut ifaddrs: *const IpAdapterAddresses;
+        let mut ifaddrs: *mut IP_ADAPTER_ADDRESSES_LH;
 
         loop {
             unsafe {
-                ifaddrs = libc::malloc(buffersize as size_t) as *mut IpAdapterAddresses;
+                ifaddrs = libc::malloc(buffersize as size_t) as *mut IP_ADAPTER_ADDRESSES_LH;
                 if ifaddrs.is_null() {
                     panic!("Failed to allocate buffer in get_if_addrs()");
                 }
@@ -132,30 +67,35 @@ impl IfAddrs {
                         | GAA_FLAG_SKIP_DNS_SERVER
                         | GAA_FLAG_INCLUDE_PREFIX
                         | GAA_FLAG_SKIP_FRIENDLY_NAME,
-                    ptr::null(),
+                    ptr::null_mut(),
                     ifaddrs,
                     &mut buffersize,
                 );
 
                 match retcode {
                     ERROR_SUCCESS => break,
-                    111 => {
+                    ERROR_BUFFER_OVERFLOW => {
                         libc::free(ifaddrs as *mut c_void);
                         buffersize *= 2;
                         continue;
                     }
-                    _ => return Err(io::Error::last_os_error()),
+                    _ => {
+                        libc::free(ifaddrs as *mut c_void);
+                        return Err(io::Error::last_os_error());
+                    }
                 }
             }
         }
 
-        Ok(Self { inner: ifaddrs })
+        Ok(Self {
+            inner: IpAdapterAddresses(ifaddrs),
+        })
     }
 
     pub fn iter(&self) -> IfAddrsIterator {
         IfAddrsIterator {
             _head: self,
-            next: self.inner,
+            next: self.inner.0,
         }
     }
 }
@@ -164,18 +104,18 @@ impl Drop for IfAddrs {
     #[allow(unsafe_code)]
     fn drop(&mut self) {
         unsafe {
-            libc::free(self.inner as *mut c_void);
+            libc::free(self.inner.0 as *mut c_void);
         }
     }
 }
 
 pub struct IfAddrsIterator<'a> {
     _head: &'a IfAddrs,
-    next: *const IpAdapterAddresses,
+    next: *const IP_ADAPTER_ADDRESSES_LH,
 }
 
 impl<'a> Iterator for IfAddrsIterator<'a> {
-    type Item = &'a IpAdapterAddresses;
+    type Item = IpAdapterAddresses;
 
     #[allow(unsafe_code)]
     fn next(&mut self) -> Option<Self::Item> {
@@ -185,20 +125,20 @@ impl<'a> Iterator for IfAddrsIterator<'a> {
 
         Some(unsafe {
             let result = &*self.next;
-            self.next = (*self.next).next;
+            self.next = (*self.next).Next;
 
-            result
+            IpAdapterAddresses(result)
         })
     }
 }
 
 pub struct PrefixesIterator<'a> {
-    _head: &'a IpAdapterAddresses,
-    next: *const IpAdapterPrefix,
+    _head: &'a IP_ADAPTER_ADDRESSES_LH,
+    next: *const IP_ADAPTER_PREFIX_XP,
 }
 
 impl<'a> Iterator for PrefixesIterator<'a> {
-    type Item = &'a IpAdapterPrefix;
+    type Item = &'a IP_ADAPTER_PREFIX_XP;
 
     #[allow(unsafe_code)]
     fn next(&mut self) -> Option<Self::Item> {
@@ -208,7 +148,7 @@ impl<'a> Iterator for PrefixesIterator<'a> {
 
         Some(unsafe {
             let result = &*self.next;
-            self.next = (*self.next).next;
+            self.next = (*self.next).Next;
 
             result
         })
@@ -216,12 +156,12 @@ impl<'a> Iterator for PrefixesIterator<'a> {
 }
 
 pub struct UnicastAddressesIterator<'a> {
-    _head: &'a IpAdapterAddresses,
-    next: *const IpAdapterUnicastAddress,
+    _head: &'a IP_ADAPTER_ADDRESSES_LH,
+    next: *const IP_ADAPTER_UNICAST_ADDRESS_LH,
 }
 
 impl<'a> Iterator for UnicastAddressesIterator<'a> {
-    type Item = &'a IpAdapterUnicastAddress;
+    type Item = &'a IP_ADAPTER_UNICAST_ADDRESS_LH;
 
     #[allow(unsafe_code)]
     fn next(&mut self) -> Option<Self::Item> {
@@ -231,7 +171,7 @@ impl<'a> Iterator for UnicastAddressesIterator<'a> {
 
         Some(unsafe {
             let result = &*self.next;
-            self.next = (*self.next).next;
+            self.next = (*self.next).Next;
 
             result
         })
