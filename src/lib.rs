@@ -340,7 +340,7 @@ mod getifaddrs_windows {
                 ret.push(Interface {
                     name: ifaddr.name(),
                     addr,
-                    idx: None,
+                    idx: ifaddr.index(),
                 });
             }
         }
