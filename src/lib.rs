@@ -23,6 +23,8 @@ pub struct Interface {
     pub name: String,
     /// The address details of the interface.
     pub addr: IfAddr,
+    /// The index of the interface.
+    pub idx: Option<u32>,
 }
 
 impl Interface {
@@ -127,6 +129,8 @@ impl Ifv6Addr {
 
 #[cfg(not(windows))]
 mod getifaddrs_posix {
+    use libc::if_nametoindex;
+
     use super::{IfAddr, Ifv4Addr, Ifv6Addr, Interface};
     use crate::posix::{self as ifaddrs, IfAddrs};
     use crate::sockaddr;
@@ -188,7 +192,19 @@ mod getifaddrs_posix {
             let name = unsafe { CStr::from_ptr(ifaddr.ifa_name) }
                 .to_string_lossy()
                 .into_owned();
-            ret.push(Interface { name, addr });
+            let idx = unsafe {
+                let idx = if_nametoindex(ifaddr.ifa_name);
+
+                // From `man if_nametoindex 3`:
+                // The if_nametoindex() function maps the interface name specified in ifname to its
+                // corresponding index. If the specified interface does not exist, it returns 0.
+                if idx == 0 {
+                    None
+                } else {
+                    Some(idx)
+                }
+            };
+            ret.push(Interface { name, addr, idx });
         }
 
         Ok(ret)
@@ -324,6 +340,7 @@ mod getifaddrs_windows {
                 ret.push(Interface {
                     name: ifaddr.name(),
                     addr,
+                    idx: None,
                 });
             }
         }
@@ -435,6 +452,13 @@ mod tests {
                 .filter(|interface| interface.is_loopback())
                 .count()
         );
+        // if index is set, it is non-zero
+        for interface in &ifaces {
+            if let Some(idx) = interface.idx {
+                assert!(idx > 0);
+            }
+        }
+
         // one address of IpV4(127.0.0.1)
         let is_loopback =
             |interface: &&Interface| interface.addr.ip() == IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
@@ -450,6 +474,9 @@ mod tests {
                 if interface.addr.ip() == addr {
                     listed = true;
                 }
+
+                #[cfg(not(windows))]
+                assert!(interface.idx.is_some());
             }
             assert!(listed);
         }
