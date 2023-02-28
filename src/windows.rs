@@ -10,6 +10,10 @@
 use libc::{self, c_char, c_int, c_ulong, c_void, size_t};
 use std::ffi::CStr;
 use std::{io, ptr};
+use windows_sys::Win32::NetworkManagement::IpHelper::{
+    GAA_FLAG_INCLUDE_PREFIX, GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER,
+    GAA_FLAG_SKIP_FRIENDLY_NAME, GAA_FLAG_SKIP_MULTICAST,
+};
 use windows_sys::Win32::Networking::WinSock::{NL_DAD_STATE, NL_PREFIX_ORIGIN, NL_SUFFIX_ORIGIN};
 use windows_sys::{Win32::Foundation::ERROR_SUCCESS, Win32::Networking::WinSock::SOCKADDR};
 
@@ -123,12 +127,11 @@ impl IfAddrs {
 
                 let retcode = GetAdaptersAddresses(
                     0,
-                    // GAA_FLAG_SKIP_ANYCAST       |
-                    // GAA_FLAG_SKIP_MULTICAST     |
-                    // GAA_FLAG_SKIP_DNS_SERVER    |
-                    // GAA_FLAG_INCLUDE_PREFIX     |
-                    // GAA_FLAG_SKIP_FRIENDLY_NAME
-                    0x3e,
+                    GAA_FLAG_SKIP_ANYCAST
+                        | GAA_FLAG_SKIP_MULTICAST
+                        | GAA_FLAG_SKIP_DNS_SERVER
+                        | GAA_FLAG_INCLUDE_PREFIX
+                        | GAA_FLAG_SKIP_FRIENDLY_NAME,
                     ptr::null(),
                     ifaddrs,
                     &mut buffersize,
