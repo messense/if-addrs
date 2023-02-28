@@ -28,6 +28,24 @@ impl IpAdapterAddresses {
             .into_owned()
     }
 
+    pub fn ipv4_index(&self) -> Option<u32> {
+        let if_index = unsafe { (*self.0).Anonymous1.Anonymous.IfIndex };
+        if if_index == 0 {
+            None
+        } else {
+            Some(if_index)
+        }
+    }
+
+    pub fn ipv6_index(&self) -> Option<u32> {
+        let if_index = unsafe { (*self.0).Ipv6IfIndex };
+        if if_index == 0 {
+            None
+        } else {
+            Some(if_index)
+        }
+    }
+
     pub fn prefixes(&self) -> PrefixesIterator {
         PrefixesIterator {
             _head: unsafe { &*self.0 },

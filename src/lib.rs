@@ -24,7 +24,7 @@ pub struct Interface {
     /// The address details of the interface.
     pub addr: IfAddr,
     /// The index of the interface.
-    pub idx: Option<u32>,
+    pub index: Option<u32>,
 }
 
 impl Interface {
@@ -192,19 +192,19 @@ mod getifaddrs_posix {
             let name = unsafe { CStr::from_ptr(ifaddr.ifa_name) }
                 .to_string_lossy()
                 .into_owned();
-            let idx = {
-                let idx = unsafe { if_nametoindex(ifaddr.ifa_name) };
+            let index = {
+                let index = unsafe { if_nametoindex(ifaddr.ifa_name) };
 
                 // From `man if_nametoindex 3`:
                 // The if_nametoindex() function maps the interface name specified in ifname to its
                 // corresponding index. If the specified interface does not exist, it returns 0.
-                if idx == 0 {
+                if index == 0 {
                     None
                 } else {
-                    Some(idx)
+                    Some(index)
                 }
             };
-            ret.push(Interface { name, addr, idx });
+            ret.push(Interface { name, addr, index });
         }
 
         Ok(ret)
@@ -337,10 +337,14 @@ mod getifaddrs_windows {
                     }
                 };
 
+                let index = match addr {
+                    IfAddr::V4(_) => ifaddr.ipv4_index(),
+                    IfAddr::V6(_) => ifaddr.ipv6_index(),
+                };
                 ret.push(Interface {
                     name: ifaddr.name(),
                     addr,
-                    idx: None,
+                    index,
                 });
             }
         }
@@ -454,7 +458,7 @@ mod tests {
         );
         // if index is set, it is non-zero
         for interface in &ifaces {
-            if let Some(idx) = interface.idx {
+            if let Some(idx) = interface.index {
                 assert!(idx > 0);
             }
         }
@@ -475,8 +479,7 @@ mod tests {
                     listed = true;
                 }
 
-                #[cfg(not(windows))]
-                assert!(interface.idx.is_some());
+                assert!(interface.index.is_some());
             }
             assert!(listed);
         }
