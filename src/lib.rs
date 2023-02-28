@@ -192,8 +192,8 @@ mod getifaddrs_posix {
             let name = unsafe { CStr::from_ptr(ifaddr.ifa_name) }
                 .to_string_lossy()
                 .into_owned();
-            let idx = unsafe {
-                let idx = if_nametoindex(ifaddr.ifa_name);
+            let idx = {
+                let idx = unsafe { if_nametoindex(ifaddr.ifa_name) };
 
                 // From `man if_nametoindex 3`:
                 // The if_nametoindex() function maps the interface name specified in ifname to its
