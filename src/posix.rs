@@ -23,6 +23,7 @@ pub fn do_broadcast(ifaddr: &ifaddrs) -> Option<IpAddr> {
     target_os = "illumos",
     target_os = "ios",
     target_os = "macos",
+    target_os = "tvos",
     target_os = "openbsd",
     target_os = "netbsd"
 ))]
