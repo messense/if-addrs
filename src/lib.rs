@@ -429,7 +429,12 @@ mod tests {
             .collect()
     }
 
-    #[cfg(any(target_os = "freebsd", target_os = "macos", target_os = "ios", target_os = "tvos"))]
+    #[cfg(any(
+        target_os = "freebsd",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "tvos"
+    ))]
     fn list_system_addrs() -> Vec<IpAddr> {
         list_system_interfaces("ifconfig", "")
             .lines()
