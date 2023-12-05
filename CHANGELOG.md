@@ -1,5 +1,8 @@
 # if-addrs - Change Log
 
+## Unreleased
+- Use Rust 1.56 stable and edition 2021
+
 ## [0.7.0]
 - Fix support for Android 11
 - Drop support for Android `<` 7
