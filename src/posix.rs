@@ -12,23 +12,32 @@ use libc::{freeifaddrs, getifaddrs, ifaddrs};
 use std::net::IpAddr;
 use std::{io, mem};
 
-#[cfg(any(target_os = "linux", target_os = "android", target_os = "nacl"))]
 pub fn do_broadcast(ifaddr: &ifaddrs) -> Option<IpAddr> {
-    sockaddr::to_ipaddr(ifaddr.ifa_ifu)
-}
+    // On Linux-like systems, `ifa_ifu` is a union of `*ifa_dstaddr` and `*ifa_broadaddr`.
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "l4re",
+        target_os = "emscripten",
+        target_os = "fuchsia",
+        target_os = "hurd",
+        target_os = "nacl",
+    ))]
+    let sockaddr = ifaddr.ifa_ifu;
 
-#[cfg(any(
-    target_os = "freebsd",
-    target_os = "haiku",
-    target_os = "illumos",
-    target_os = "ios",
-    target_os = "macos",
-    target_os = "tvos",
-    target_os = "openbsd",
-    target_os = "netbsd"
-))]
-pub fn do_broadcast(ifaddr: &ifaddrs) -> Option<IpAddr> {
-    sockaddr::to_ipaddr(ifaddr.ifa_dstaddr)
+    // On BSD-like and embedded systems, only `ifa_dstaddr` is available.
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "l4re",
+        target_os = "emscripten",
+        target_os = "fuchsia",
+        target_os = "hurd",
+        target_os = "nacl",
+    )))]
+    let sockaddr = ifaddr.ifa_dstaddr;
+
+    sockaddr::to_ipaddr(sockaddr)
 }
 
 pub struct IfAddrs {
