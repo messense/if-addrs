@@ -25,6 +25,12 @@ pub struct Interface {
     pub addr: IfAddr,
     /// The index of the interface.
     pub index: Option<u32>,
+    /// (Windows only) A permanent and unique identifier for the interface. It
+    /// cannot be modified by the user. It is typically a GUID string of the
+    /// form: "{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}", but this is not
+    /// guaranteed by the Windows API.
+    #[cfg(windows)]
+    pub adapter_name: String,
 }
 
 impl Interface {
@@ -345,6 +351,7 @@ mod getifaddrs_windows {
                     name: ifaddr.name(),
                     addr,
                     index,
+                    adapter_name: ifaddr.adapter_name(),
                 });
             }
         }

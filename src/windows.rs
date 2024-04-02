@@ -12,8 +12,8 @@ use std::{io, ptr};
 use windows_sys::Win32::Foundation::{ERROR_BUFFER_OVERFLOW, ERROR_SUCCESS};
 use windows_sys::Win32::NetworkManagement::IpHelper::{
     GetAdaptersAddresses, GAA_FLAG_INCLUDE_PREFIX, GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER,
-    GAA_FLAG_SKIP_FRIENDLY_NAME, GAA_FLAG_SKIP_MULTICAST, IP_ADAPTER_ADDRESSES_LH,
-    IP_ADAPTER_PREFIX_XP, IP_ADAPTER_UNICAST_ADDRESS_LH,
+    GAA_FLAG_SKIP_MULTICAST, IP_ADAPTER_ADDRESSES_LH, IP_ADAPTER_PREFIX_XP,
+    IP_ADAPTER_UNICAST_ADDRESS_LH,
 };
 use windows_sys::Win32::System::Memory::{
     GetProcessHeap, HeapAlloc, HeapFree, HEAP_NONE, HEAP_ZERO_MEMORY,
@@ -25,6 +25,15 @@ pub struct IpAdapterAddresses(*const IP_ADAPTER_ADDRESSES_LH);
 impl IpAdapterAddresses {
     #[allow(unsafe_code)]
     pub fn name(&self) -> String {
+        let len = (0..)
+            .take_while(|&i| unsafe { *(*self.0).FriendlyName.offset(i) } != 0)
+            .count();
+        let slice = unsafe { std::slice::from_raw_parts((*self.0).FriendlyName, len) };
+        String::from_utf16_lossy(slice)
+    }
+
+    #[allow(unsafe_code)]
+    pub fn adapter_name(&self) -> String {
         unsafe { CStr::from_ptr((*self.0).AdapterName as _) }
             .to_string_lossy()
             .into_owned()
@@ -86,8 +95,7 @@ impl IfAddrs {
                     GAA_FLAG_SKIP_ANYCAST
                         | GAA_FLAG_SKIP_MULTICAST
                         | GAA_FLAG_SKIP_DNS_SERVER
-                        | GAA_FLAG_INCLUDE_PREFIX
-                        | GAA_FLAG_SKIP_FRIENDLY_NAME,
+                        | GAA_FLAG_INCLUDE_PREFIX,
                     ptr::null_mut(),
                     ifaddrs,
                     &mut buffersize,
