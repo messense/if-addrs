@@ -8,16 +8,22 @@
 // Software.
 
 use std::ffi::CStr;
+use std::time::Duration;
 use std::{io, ptr};
-use windows_sys::Win32::Foundation::{ERROR_BUFFER_OVERFLOW, ERROR_SUCCESS};
-use windows_sys::Win32::NetworkManagement::IpHelper::{
-    GetAdaptersAddresses, GAA_FLAG_INCLUDE_PREFIX, GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER,
-    GAA_FLAG_SKIP_MULTICAST, IP_ADAPTER_ADDRESSES_LH, IP_ADAPTER_PREFIX_XP,
-    IP_ADAPTER_UNICAST_ADDRESS_LH,
+use windows_sys::Win32::Foundation::{
+    ERROR_BUFFER_OVERFLOW, ERROR_SUCCESS, HANDLE, NO_ERROR, WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT
 };
+use windows_sys::Win32::NetworkManagement::IpHelper::{
+    CancelIPChangeNotify, GetAdaptersAddresses, NotifyAddrChange, GAA_FLAG_INCLUDE_PREFIX,
+    GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER, GAA_FLAG_SKIP_MULTICAST,
+    IP_ADAPTER_ADDRESSES_LH, IP_ADAPTER_PREFIX_XP, IP_ADAPTER_UNICAST_ADDRESS_LH,
+};
+use windows_sys::Win32::Networking::WinSock::{WSACloseEvent, WSACreateEvent, WSAGetLastError, WSA_IO_PENDING};
 use windows_sys::Win32::System::Memory::{
     GetProcessHeap, HeapAlloc, HeapFree, HEAP_NONE, HEAP_ZERO_MEMORY,
 };
+use windows_sys::Win32::System::Threading::{WaitForSingleObject, INFINITE};
+use windows_sys::Win32::System::IO::OVERLAPPED;
 
 #[repr(transparent)]
 pub struct IpAdapterAddresses(*const IP_ADAPTER_ADDRESSES_LH);
@@ -205,4 +211,41 @@ impl<'a> Iterator for UnicastAddressesIterator<'a> {
             result
         })
     }
+}
+
+/// Block until the OS reports that the network interface list has changed, or
+/// until an optional timeout. Returns an [`io::ErrorKind::WouldBlock`] error on
+/// timeout, or another error if the network notifier could not be set up.
+pub fn detect_interface_changes(timeout: Option<Duration>) -> io::Result<()> {
+    let mut overlap: OVERLAPPED = unsafe { std::mem::zeroed() };
+    let mut notify_event: HANDLE = Default::default();
+    overlap.hEvent = unsafe { WSACreateEvent() };
+
+    let ret = unsafe { NotifyAddrChange(&mut notify_event, &overlap) };
+
+    if ret != NO_ERROR {
+        let code = unsafe { WSAGetLastError() };
+        if code != WSA_IO_PENDING {
+            unsafe { WSACloseEvent(overlap.hEvent) };
+            return Err(io::Error::from_raw_os_error(code));
+        }
+    }
+
+    let millis = if let Some(timeout) = timeout {
+        timeout.as_millis().try_into().expect("timeout overflow")
+    } else {
+        INFINITE
+    };
+
+    let ret = match unsafe { WaitForSingleObject(overlap.hEvent, millis) } {
+        WAIT_OBJECT_0 => Ok(()),
+        WAIT_TIMEOUT | WAIT_ABANDONED => Err(io::Error::new(io::ErrorKind::WouldBlock, "Timed out")),
+        _ => Err(io::Error::last_os_error()),
+    };
+    unsafe {
+        CancelIPChangeNotify(&overlap);
+        WSACloseEvent(overlap.hEvent);
+    };
+
+    ret
 }

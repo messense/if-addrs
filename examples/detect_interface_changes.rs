@@ -7,10 +7,13 @@
 // specific language governing permissions and limitations relating to use of the SAFE Network
 // Software.
 
-//! List interface example.
+//! Interface change notifier example.
 
 fn main() {
-    let ifaces = if_addrs::get_if_addrs().unwrap();
-    println!("Got list of interfaces");
-    println!("{:#?}", ifaces);
+    println!("Waiting for interface changes...");
+    loop {
+        if if_addrs::detect_interface_changes(None).is_ok() {
+            println!("Network interfaces changed");
+        }
+    }
 }

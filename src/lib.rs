@@ -384,6 +384,11 @@ pub fn get_if_addrs() -> io::Result<Vec<Interface>> {
     getifaddrs_windows::get_if_addrs()
 }
 
+#[cfg(windows)]
+pub use windows::detect_interface_changes;
+#[cfg(not(windows))]
+pub use posix::detect_interface_changes;
+
 #[cfg(test)]
 mod tests {
     use super::{get_if_addrs, Interface};
