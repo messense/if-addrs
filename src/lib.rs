@@ -9,12 +9,16 @@
 
 #[cfg(not(windows))]
 mod posix;
+#[cfg(all(not(windows), not(any(target_os = "macos", target_os = "ios"))))]
+mod posix_not_mac;
 mod sockaddr;
 #[cfg(windows)]
 mod windows;
 
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+use std::time::Duration;
 
 /// Details about an interface on this host.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -378,16 +382,27 @@ mod getifaddrs_windows {
     }
 }
 
+/// Get a list of all the network interfaces on this machine along with their IP info.
 #[cfg(windows)]
-/// Get address
 pub fn get_if_addrs() -> io::Result<Vec<Interface>> {
     getifaddrs_windows::get_if_addrs()
 }
 
-#[cfg(windows)]
-pub use windows::detect_interface_changes;
-#[cfg(not(windows))]
-pub use posix::detect_interface_changes;
+/// (Not available on iOS/macOS) Block until the OS reports that the network
+/// interface list has changed, or until an optional timeout.
+///
+/// For example, if an ethernet connector is plugged/unplugged, or a WiFi
+/// network is connected to.
+///
+/// Returns an [`io::ErrorKind::WouldBlock`] error on timeout, or another error
+/// if the network notifier could not be set up.
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+pub fn detect_interface_changes(timeout: Option<Duration>) -> io::Result<()> {
+    #[cfg(windows)]
+    return windows::detect_interface_changes(timeout);
+    #[cfg(not(windows))]
+    return posix_not_mac::detect_interface_changes(timeout);
+}
 
 #[cfg(test)]
 mod tests {

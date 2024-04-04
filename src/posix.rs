@@ -8,12 +8,8 @@
 // Software.
 
 use crate::sockaddr;
-use libc::{
-    bind, close, freeifaddrs, getifaddrs, ifaddrs, sockaddr_nl, socket, AF_NETLINK, NETLINK_ROUTE, SOCK_RAW
-};
-use std::net::{IpAddr, UdpSocket};
-use std::os::fd::FromRawFd;
-use std::time::Duration;
+use libc::{freeifaddrs, getifaddrs, ifaddrs};
+use std::net::IpAddr;
 use std::{io, mem};
 
 pub fn do_broadcast(ifaddr: &ifaddrs) -> Option<IpAddr> {
@@ -97,40 +93,4 @@ impl Iterator for IfAddrsIterator {
             result
         })
     }
-}
-
-/// Block until the OS reports that the network interface list has changed, or
-/// until an optional timeout. Returns an [`io::ErrorKind::WouldBlock`] error on
-/// timeout, or another error if the network notifier could not be set up.
-pub fn detect_interface_changes(timeout: Option<Duration>) -> io::Result<()> {
-    let socket = unsafe { socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE) };
-    if socket < 0 {
-        return Err(io::Error::last_os_error());
-    }
-
-    let mut sockaddr: sockaddr_nl = unsafe { mem::zeroed() };
-    sockaddr.nl_family = AF_NETLINK as u16;
-    sockaddr.nl_groups = 1; // RTNLGRP_LINK
-
-    if unsafe {
-        bind(
-            socket,
-            &sockaddr as *const _ as *const libc::sockaddr,
-            mem::size_of::<sockaddr_nl>() as libc::socklen_t,
-        )
-    } < 0
-    {
-        unsafe { close(socket) };
-        return Err(io::Error::last_os_error());
-    }
-
-    // lie about the type, since they all use fds and we don't need specifics
-    // after we have called bind
-    let socket = unsafe { UdpSocket::from_raw_fd(socket) };
-
-    let mut buf = [0u8; 65536];
-    socket.set_read_timeout(timeout)?;
-    socket.recv(&mut buf)?;
-
-    Ok(())
 }

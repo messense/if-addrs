@@ -9,6 +9,7 @@
 
 //! Interface change notifier example.
 
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
 fn main() {
     println!("Waiting for interface changes...");
     loop {
@@ -16,4 +17,9 @@ fn main() {
             println!("Network interfaces changed");
         }
     }
+}
+
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+fn main() {
+    println!("Interface change API is not implemented for macOS or iOS");
 }
