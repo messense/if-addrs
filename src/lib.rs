@@ -347,7 +347,6 @@ mod getifaddrs_windows {
                                         netmask[0], netmask[1], netmask[2], netmask[3], netmask[4],
                                         netmask[5], netmask[6], netmask[7],
                                     );
-                                    println!("IPv6 address/netmask: {:?}/{:?}", ipv6_addr, item_netmask);
                                     break 'prefixloopv6;
                                 }
                                 _ => continue,
