@@ -92,6 +92,8 @@ pub struct Ifv4Addr {
     pub ip: Ipv4Addr,
     /// The netmask of the interface.
     pub netmask: Ipv4Addr,
+    /// The CIDR prefix of the interface.
+    pub prefixlen: u8,
     /// The broadcast address of the interface.
     pub broadcast: Option<Ipv4Addr>,
 }
@@ -115,6 +117,8 @@ pub struct Ifv6Addr {
     pub ip: Ipv6Addr,
     /// The netmask of the interface.
     pub netmask: Ipv6Addr,
+    /// The CIDR prefix of the interface.
+    pub prefixlen: u8,
     /// The broadcast address of the interface.
     pub broadcast: Option<Ipv6Addr>,
 }
@@ -166,10 +170,15 @@ mod getifaddrs_posix {
                     } else {
                         None
                     };
-
+                    let prefixlen = if cfg!(target_endian = "little") {
+                        u32::from_le_bytes(netmask.octets()).count_ones() as u8
+                    } else {
+                        u32::from_be_bytes(netmask.octets()).count_ones() as u8
+                    };
                     IfAddr::V4(Ifv4Addr {
                         ip: ipv4_addr,
                         netmask,
+                        prefixlen: prefixlen,
                         broadcast,
                     })
                 }
@@ -186,10 +195,15 @@ mod getifaddrs_posix {
                     } else {
                         None
                     };
-
+                    let prefixlen = if cfg!(target_endian = "little") {
+                        u128::from_le_bytes(netmask.octets()).count_ones() as u8
+                    } else {
+                        u128::from_be_bytes(netmask.octets()).count_ones() as u8
+                    };
                     IfAddr::V6(Ifv6Addr {
                         ip: ipv6_addr,
                         netmask,
+                        prefixlen: prefixlen,
                         broadcast,
                     })
                 }
@@ -247,6 +261,7 @@ mod getifaddrs_windows {
                     Some(IpAddr::V4(ipv4_addr)) => {
                         let mut item_netmask = Ipv4Addr::new(0, 0, 0, 0);
                         let mut item_broadcast = None;
+                        let item_prefix = addr.OnLinkPrefixLength;
 
                         // Search prefixes for a prefix matching addr
                         'prefixloopv4: for prefix in ifaddr.prefixes() {
@@ -294,11 +309,13 @@ mod getifaddrs_windows {
                         IfAddr::V4(Ifv4Addr {
                             ip: ipv4_addr,
                             netmask: item_netmask,
+                            prefixlen: item_prefix,
                             broadcast: item_broadcast,
                         })
                     }
                     Some(IpAddr::V6(ipv6_addr)) => {
                         let mut item_netmask = Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0);
+                        let item_prefix = addr.OnLinkPrefixLength;
                         // Search prefixes for a prefix matching addr
                         'prefixloopv6: for prefix in ifaddr.prefixes() {
                             let ipprefix = sockaddr::to_ipaddr(prefix.Address.lpSockaddr);
@@ -330,6 +347,7 @@ mod getifaddrs_windows {
                                         netmask[0], netmask[1], netmask[2], netmask[3], netmask[4],
                                         netmask[5], netmask[6], netmask[7],
                                     );
+                                    println!("IPv6 address/netmask: {:?}/{:?}", ipv6_addr, item_netmask);
                                     break 'prefixloopv6;
                                 }
                                 _ => continue,
@@ -338,6 +356,7 @@ mod getifaddrs_windows {
                         IfAddr::V6(Ifv6Addr {
                             ip: ipv6_addr,
                             netmask: item_netmask,
+                            prefixlen: item_prefix,
                             broadcast: None,
                         })
                     }
