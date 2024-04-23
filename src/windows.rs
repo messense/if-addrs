@@ -7,26 +7,22 @@
 // specific language governing permissions and limitations relating to use of the SAFE Network
 // Software.
 
-use std::ffi::CStr;
+use std::ffi::{c_void, CStr};
+
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::time::Duration;
 use std::{io, ptr};
-use windows_sys::Win32::Foundation::{
-    ERROR_BUFFER_OVERFLOW, ERROR_SUCCESS, HANDLE, NO_ERROR, WAIT_ABANDONED, WAIT_OBJECT_0,
-    WAIT_TIMEOUT,
-};
+use windows_sys::Win32::Foundation::{ERROR_BUFFER_OVERFLOW, ERROR_SUCCESS, HANDLE};
 use windows_sys::Win32::NetworkManagement::IpHelper::{
-    CancelIPChangeNotify, GetAdaptersAddresses, NotifyAddrChange, GAA_FLAG_INCLUDE_PREFIX,
+    CancelMibChangeNotify2, GetAdaptersAddresses, NotifyIpInterfaceChange, GAA_FLAG_INCLUDE_PREFIX,
     GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER, GAA_FLAG_SKIP_MULTICAST,
     IP_ADAPTER_ADDRESSES_LH, IP_ADAPTER_PREFIX_XP, IP_ADAPTER_UNICAST_ADDRESS_LH,
+    MIB_IPINTERFACE_ROW, MIB_NOTIFICATION_TYPE,
 };
-use windows_sys::Win32::Networking::WinSock::{
-    WSACloseEvent, WSACreateEvent, WSAGetLastError, WSA_IO_PENDING,
-};
+use windows_sys::Win32::Networking::WinSock::AF_UNSPEC;
 use windows_sys::Win32::System::Memory::{
     GetProcessHeap, HeapAlloc, HeapFree, HEAP_NONE, HEAP_ZERO_MEMORY,
 };
-use windows_sys::Win32::System::Threading::{WaitForSingleObject, INFINITE};
-use windows_sys::Win32::System::IO::OVERLAPPED;
 
 #[repr(transparent)]
 pub struct IpAdapterAddresses(*const IP_ADAPTER_ADDRESSES_LH);
@@ -216,38 +212,83 @@ impl<'a> Iterator for UnicastAddressesIterator<'a> {
     }
 }
 
-pub fn detect_interface_changes(timeout: Option<Duration>) -> io::Result<()> {
-    let mut overlap: OVERLAPPED = unsafe { std::mem::zeroed() };
-    let mut notify_event: HANDLE = Default::default();
-    overlap.hEvent = unsafe { WSACreateEvent() };
+pub struct WindowsIfChangeNotifier {
+    handle: HANDLE,
+    // maintain constant memory address for callback fn
+    tx: *mut Sender<()>,
+    rx: Receiver<()>,
+}
 
-    let ret = unsafe { NotifyAddrChange(&mut notify_event, &overlap) };
-
-    if ret != NO_ERROR {
-        let code = unsafe { WSAGetLastError() };
-        if code != WSA_IO_PENDING {
-            unsafe { WSACloseEvent(overlap.hEvent) };
-            return Err(io::Error::from_raw_os_error(code));
+impl WindowsIfChangeNotifier {
+    pub fn new() -> io::Result<Self> {
+        let (tx, rx) = channel();
+        let mut ret = Self {
+            handle: 0,
+            tx: Box::into_raw(Box::new(tx)),
+            rx,
+        };
+        let stat = unsafe {
+            // Notes on the function used here and alternatives that were
+            // considered:
+            //
+            // NotifyAddrChange works pretty well, but only for IPv4, and the
+            // API itself is a little awkward, requiring overlapped IO
+            //
+            // NotifyRouteChange2 doesn't catch interfaces going away (e.g.
+            // unplugging ethernet, going into airplane mode)
+            //
+            // WlanRegisterNotification is only for WiFi
+            //
+            // Monitoring changes to MSFT_NetAdapter is possible, but requires
+            // WMI/COM, which is undesirable
+            //
+            // NotifyIpInterfaceChange produces several spurious messages
+            // (mostly related to WiFi speed, it seems), but they aren't too
+            // frequent (at most, I've seen a batch of 3 every 10 seconds), so
+            // don't pose a performance concern
+            NotifyIpInterfaceChange(
+                AF_UNSPEC,
+                Some(if_change_callback),
+                ret.tx as *const c_void,
+                0,
+                &mut ret.handle,
+            )
+        };
+        if stat != 0 {
+            Err(io::Error::from_raw_os_error(stat as i32))
+        } else {
+            Ok(ret)
         }
     }
 
-    let millis = if let Some(timeout) = timeout {
-        timeout.as_millis().try_into().expect("timeout overflow")
-    } else {
-        INFINITE
-    };
-
-    let ret = match unsafe { WaitForSingleObject(overlap.hEvent, millis) } {
-        WAIT_OBJECT_0 => Ok(()),
-        WAIT_TIMEOUT | WAIT_ABANDONED => {
-            Err(io::Error::new(io::ErrorKind::WouldBlock, "Timed out"))
+    pub fn wait(&self, timeout: Option<Duration>) -> io::Result<()> {
+        if let Some(timeout) = timeout {
+            self.rx.recv_timeout(timeout)
+        } else {
+            self.rx.recv().map_err(RecvTimeoutError::from)
         }
-        _ => Err(io::Error::last_os_error()),
-    };
-    unsafe {
-        CancelIPChangeNotify(&overlap);
-        WSACloseEvent(overlap.hEvent);
+        .map_err(|_| io::Error::new(io::ErrorKind::WouldBlock, "Timed out"))
+    }
+}
+
+impl Drop for WindowsIfChangeNotifier {
+    fn drop(&mut self) {
+        if self.handle != 0 {
+            unsafe { CancelMibChangeNotify2(self.handle) };
+        }
+        unsafe { drop(Box::from_raw(self.tx)) };
+    }
+}
+
+unsafe extern "system" fn if_change_callback(
+    ctx: *const c_void,
+    _row: *const MIB_IPINTERFACE_ROW,
+    _notificationtype: MIB_NOTIFICATION_TYPE,
+) {
+    if let Some(tx) = (ctx as *const Sender<()>).as_ref() {
+        tx.send(()).ok();
     };
 
-    ret
+    // note: `row` not used, as for all changes that we care for (interface
+    // add/remove), all the member values are 0, so it's useless.
 }

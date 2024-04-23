@@ -11,15 +11,16 @@
 
 #[cfg(not(any(target_os = "macos", target_os = "ios")))]
 fn main() {
+    let mut if_change_notifier = if_addrs::IfChangeNotifier::new().unwrap();
     println!("Waiting for interface changes...");
     loop {
-        if if_addrs::detect_interface_changes(None).is_ok() {
-            println!("Network interfaces changed");
+        if let Ok(details) = if_change_notifier.wait(None) {
+            println!("Network interfaces changed: {:#?}", details);
         }
     }
 }
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 fn main() {
-    println!("Interface change API is not implemented for macOS or iOS");
+    panic!("Interface change API is not implemented for macOS or iOS");
 }
