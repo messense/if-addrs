@@ -9,6 +9,8 @@
 
 #[cfg(not(windows))]
 mod posix;
+#[cfg(all(not(windows), not(any(target_os = "macos", target_os = "ios"))))]
+mod posix_not_mac;
 mod sockaddr;
 #[cfg(windows)]
 mod windows;
@@ -178,7 +180,7 @@ mod getifaddrs_posix {
                     IfAddr::V4(Ifv4Addr {
                         ip: ipv4_addr,
                         netmask,
-                        prefixlen: prefixlen,
+                        prefixlen,
                         broadcast,
                     })
                 }
@@ -203,7 +205,7 @@ mod getifaddrs_posix {
                     IfAddr::V6(Ifv6Addr {
                         ip: ipv6_addr,
                         netmask,
-                        prefixlen: prefixlen,
+                        prefixlen,
                         broadcast,
                     })
                 }
@@ -378,11 +380,92 @@ mod getifaddrs_windows {
     }
 }
 
+/// Get a list of all the network interfaces on this machine along with their IP info.
 #[cfg(windows)]
-/// Get address
 pub fn get_if_addrs() -> io::Result<Vec<Interface>> {
     getifaddrs_windows::get_if_addrs()
 }
+
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+mod if_change_notifier {
+    use super::Interface;
+    use std::collections::HashSet;
+    use std::io;
+    use std::time::{Duration, Instant};
+
+    #[derive(Debug, PartialEq, Eq, Hash, Clone)]
+    pub enum IfChangeType {
+        Added(Interface),
+        Removed(Interface),
+    }
+
+    #[cfg(windows)]
+    type InternalIfChangeNotifier = crate::windows::WindowsIfChangeNotifier;
+    #[cfg(not(windows))]
+    type InternalIfChangeNotifier = crate::posix_not_mac::PosixIfChangeNotifier;
+
+    /// (Not available on iOS/macOS) A utility to monitor for interface changes
+    /// and report them, so you can handle events such as WiFi
+    /// disconnection/flight mode/route changes
+    pub struct IfChangeNotifier {
+        inner: InternalIfChangeNotifier,
+        last_ifs: HashSet<Interface>,
+    }
+
+    impl IfChangeNotifier {
+        /// Create a new interface change notifier Returns an
+        /// [`io::ErrorKind::WouldBlock`] error if the network notifier could
+        /// not be set up.
+        pub fn new() -> io::Result<Self> {
+            Ok(Self {
+                inner: InternalIfChangeNotifier::new()?,
+                last_ifs: HashSet::from_iter(super::get_if_addrs()?),
+            })
+        }
+
+        /// (Not available on iOS/macOS) Block until the OS reports that the
+        /// network interface list has changed, or until an optional timeout.
+        ///
+        /// For example, if an ethernet connector is plugged/unplugged, or a
+        /// WiFi network is connected to.
+        ///
+        /// The changed interfaces are returned. If an interface has both IPv4
+        /// and IPv6 addresses, you can expect both of them to be returned from
+        /// a single call to `wait`.
+        ///
+        /// Returns an [`io::ErrorKind::WouldBlock`] error on timeout, or
+        /// another error if the network notifier could not be read from.
+        pub fn wait(&mut self, timeout: Option<Duration>) -> io::Result<Vec<IfChangeType>> {
+            let start = Instant::now();
+            loop {
+                self.inner
+                    .wait(timeout.map(|t| t.saturating_sub(start.elapsed())))?;
+
+                // something has changed - now we find out what (or whether it was spurious)
+                let new_ifs = HashSet::from_iter(super::get_if_addrs()?);
+                let mut changes: Vec<IfChangeType> = new_ifs
+                    .difference(&self.last_ifs)
+                    .cloned()
+                    .map(IfChangeType::Added)
+                    .collect();
+                changes.extend(
+                    self.last_ifs
+                        .difference(&new_ifs)
+                        .cloned()
+                        .map(IfChangeType::Removed),
+                );
+                self.last_ifs = new_ifs;
+
+                if !changes.is_empty() {
+                    return Ok(changes);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+pub use if_change_notifier::{IfChangeNotifier, IfChangeType};
 
 #[cfg(test)]
 mod tests {
@@ -402,7 +485,7 @@ mod tests {
         };
         let mut process = match start_cmd {
             Err(why) => {
-                println!("couldn't start cmd {} : {}", cmd, why.to_string());
+                println!("couldn't start cmd {} : {}", cmd, why);
                 return "".to_string();
             }
             Ok(process) => process,
@@ -513,5 +596,24 @@ mod tests {
             }
             assert!(listed);
         }
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    #[test]
+    fn test_if_notifier() {
+        // Check that the interface notifier can start up and time out. No easy
+        // way to programmatically add/remove interfaces, so set a timeout of 0.
+        // Will cover a potential case of inadequate setup leading to an
+        // immediate change notification.
+        //
+        // There is a small race condition from creation -> check that an
+        // interface change *actually* occurs, so this test may spuriously fail
+        // extremely rarely.
+
+        let notifier = crate::IfChangeNotifier::new();
+        assert!(notifier.is_ok());
+        let mut notifier = notifier.unwrap();
+
+        assert!(notifier.wait(Some(Duration::ZERO)).is_err());
     }
 }
