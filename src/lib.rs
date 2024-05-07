@@ -413,9 +413,8 @@ mod if_change_notifier {
     }
 
     impl IfChangeNotifier {
-        /// Create a new interface change notifier Returns an
-        /// [`io::ErrorKind::WouldBlock`] error if the network notifier could
-        /// not be set up.
+        /// Create a new interface change notifier. Returns an OS specific error
+        /// if the network notifier could not be set up.
         pub fn new() -> io::Result<Self> {
             Ok(Self {
                 inner: InternalIfChangeNotifier::new()?,
