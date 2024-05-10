@@ -3,7 +3,7 @@ https://crates.io/crates/if-addrs
 
 ## Overview
 
-Retrieve network interface info for all interfaces on the system.
+Retrieve network interface info for all interfaces on the system:
 
 ```rust
 // List all of the machine's network interfaces
@@ -12,9 +12,16 @@ for iface in if_addrs::get_if_addrs().unwrap() {
 }
 ```
 
-## Todo Items
+Get notifications for changes in network interfaces:
 
-  * Create an API for responding to changes in network interfaces.
+```rust
+let mut notifier = if_addrs::IfChangeNotifier::new().unwrap();
+loop {
+    if let Ok(details) = notifier.wait(None) {
+        println!("{:#?}", details);
+    }
+}
+```
 
 ## License
 
