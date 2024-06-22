@@ -72,7 +72,10 @@ impl PosixIfChangeNotifier {
         let timeout = if let Some(timeout) = timeout {
             let mut t = timeval {
                 tv_sec: timeout.as_secs().try_into().expect("timeout overflow"),
-                tv_usec: timeout.subsec_micros().try_into().expect("timeout overflow"),
+                tv_usec: timeout
+                    .subsec_micros()
+                    .try_into()
+                    .expect("timeout overflow"),
             };
             // a timeout of 0 is infinity, so if the requested duration is too
             // small, make it nonzero
