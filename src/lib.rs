@@ -22,7 +22,9 @@ mod posix;
             target_os = "watchos",
             target_os = "visionos"
         )
-    ))
+    )),
+    not(target_os = "freebsd"),
+    not(target_os = "netbsd"),
 ))]
 mod posix_not_apple;
 mod sockaddr;
@@ -410,17 +412,28 @@ pub fn get_if_addrs() -> io::Result<Vec<Interface>> {
     getifaddrs_windows::get_if_addrs()
 }
 
-#[cfg(not(all(
-    target_vendor = "apple",
-    any(
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "tvos",
-        target_os = "watchos",
-        target_os = "visionos"
-    )
+#[cfg(not(any(
+    all(
+        target_vendor = "apple",
+        any(
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "tvos",
+            target_os = "watchos",
+            target_os = "visionos"
+        )
+    ),
+    target_os = "freebsd",
+    target_os = "netbsd",
 )))]
-#[cfg_attr(docsrs, doc(cfg(not(target_vendor = "apple"))))]
+#[cfg_attr(
+    docsrs,
+    doc(cfg(any(
+        not(target_vendor = "apple"),
+        not(target_os = "freebsd"),
+        not(target_os = "netbsd")
+    )))
+)]
 mod if_change_notifier {
     use super::Interface;
     use std::collections::HashSet;
@@ -648,15 +661,19 @@ mod tests {
         }
     }
 
-    #[cfg(not(all(
-        target_vendor = "apple",
-        any(
-            target_os = "macos",
-            target_os = "ios",
-            target_os = "tvos",
-            target_os = "watchos",
-            target_os = "visionos"
-        )
+    #[cfg(not(any(
+        all(
+            target_vendor = "apple",
+            any(
+                target_os = "macos",
+                target_os = "ios",
+                target_os = "tvos",
+                target_os = "watchos",
+                target_os = "visionos"
+            )
+        ),
+        target_os = "freebsd",
+        target_os = "netbsd",
     )))]
     #[test]
     fn test_if_notifier() {
