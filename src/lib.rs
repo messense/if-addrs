@@ -22,7 +22,7 @@ mod posix;
         )
     ))
 ))]
-mod posix_not_mac;
+mod posix_not_apple;
 mod sockaddr;
 #[cfg(windows)]
 mod windows;
@@ -423,7 +423,7 @@ mod if_change_notifier {
     #[cfg(windows)]
     type InternalIfChangeNotifier = crate::windows::WindowsIfChangeNotifier;
     #[cfg(not(windows))]
-    type InternalIfChangeNotifier = crate::posix_not_mac::PosixIfChangeNotifier;
+    type InternalIfChangeNotifier = crate::posix_not_apple::PosixIfChangeNotifier;
 
     /// (Not available on iOS/macOS) A utility to monitor for interface changes
     /// and report them, so you can handle events such as WiFi

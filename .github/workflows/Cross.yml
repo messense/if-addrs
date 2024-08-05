@@ -55,4 +55,4 @@ jobs:
           components: rust-src
 
       - uses: Build
-        run: cargo build --target ${{ matrix.target }} ${{ matrix.tier3 ?? '-Zbuild-std' : '' }}
+        run: cargo build --target ${{ matrix.target }} ${{ matrix.tier3 ?? '-Zbuild-std' || '' }}
