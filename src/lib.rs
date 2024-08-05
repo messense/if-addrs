@@ -6,11 +6,28 @@
 // modified, or distributed except according to those terms. Please review the Licences for the
 // specific language governing permissions and limitations relating to use of the SAFE Network
 // Software.
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 #[cfg(not(windows))]
 mod posix;
-#[cfg(all(not(windows), not(any(target_os = "macos", target_os = "ios"))))]
-mod posix_not_mac;
+#[cfg(all(
+    not(windows),
+    not(all(
+        target_vendor = "apple",
+        any(
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "tvos",
+            target_os = "watchos",
+            target_os = "visionos"
+        )
+    )),
+    not(target_os = "freebsd"),
+    not(target_os = "netbsd"),
+    not(target_os = "openbsd")
+))]
+mod posix_not_apple;
 mod sockaddr;
 #[cfg(windows)]
 mod windows;
@@ -37,17 +54,20 @@ pub struct Interface {
 
 impl Interface {
     /// Check whether this is a loopback interface.
-    pub fn is_loopback(&self) -> bool {
+    #[must_use]
+    pub const fn is_loopback(&self) -> bool {
         self.addr.is_loopback()
     }
 
     /// Check whether this is a link local interface.
-    pub fn is_link_local(&self) -> bool {
+    #[must_use]
+    pub const fn is_link_local(&self) -> bool {
         self.addr.is_link_local()
     }
 
     /// Get the IP address of this interface.
-    pub fn ip(&self) -> IpAddr {
+    #[must_use]
+    pub const fn ip(&self) -> IpAddr {
         self.addr.ip()
     }
 }
@@ -63,7 +83,8 @@ pub enum IfAddr {
 
 impl IfAddr {
     /// Check whether this is a loopback address.
-    pub fn is_loopback(&self) -> bool {
+    #[must_use]
+    pub const fn is_loopback(&self) -> bool {
         match *self {
             IfAddr::V4(ref ifv4_addr) => ifv4_addr.is_loopback(),
             IfAddr::V6(ref ifv6_addr) => ifv6_addr.is_loopback(),
@@ -71,7 +92,8 @@ impl IfAddr {
     }
 
     /// Check whether this is a link local interface.
-    pub fn is_link_local(&self) -> bool {
+    #[must_use]
+    pub const fn is_link_local(&self) -> bool {
         match *self {
             IfAddr::V4(ref ifv4_addr) => ifv4_addr.is_link_local(),
             IfAddr::V6(ref ifv6_addr) => ifv6_addr.is_link_local(),
@@ -79,7 +101,8 @@ impl IfAddr {
     }
 
     /// Get the IP address of this interface address.
-    pub fn ip(&self) -> IpAddr {
+    #[must_use]
+    pub const fn ip(&self) -> IpAddr {
         match *self {
             IfAddr::V4(ref ifv4_addr) => IpAddr::V4(ifv4_addr.ip),
             IfAddr::V6(ref ifv6_addr) => IpAddr::V6(ifv6_addr.ip),
@@ -102,12 +125,14 @@ pub struct Ifv4Addr {
 
 impl Ifv4Addr {
     /// Check whether this is a loopback address.
-    pub fn is_loopback(&self) -> bool {
-        self.ip.octets()[0] == 127
+    #[must_use]
+    pub const fn is_loopback(&self) -> bool {
+        self.ip.is_loopback()
     }
 
     /// Check whether this is a link local address.
-    pub fn is_link_local(&self) -> bool {
+    #[must_use]
+    pub const fn is_link_local(&self) -> bool {
         self.ip.is_link_local()
     }
 }
@@ -127,12 +152,14 @@ pub struct Ifv6Addr {
 
 impl Ifv6Addr {
     /// Check whether this is a loopback address.
-    pub fn is_loopback(&self) -> bool {
-        self.ip.segments() == [0, 0, 0, 0, 0, 0, 0, 1]
+    #[must_use]
+    pub const fn is_loopback(&self) -> bool {
+        self.ip.is_loopback()
     }
 
     /// Check whether this is a link local address.
-    pub fn is_link_local(&self) -> bool {
+    #[must_use]
+    pub const fn is_link_local(&self) -> bool {
         let bytes = self.ip.octets();
 
         bytes[0] == 0xfe && bytes[1] == 0x80
@@ -386,7 +413,30 @@ pub fn get_if_addrs() -> io::Result<Vec<Interface>> {
     getifaddrs_windows::get_if_addrs()
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+#[cfg(not(any(
+    all(
+        target_vendor = "apple",
+        any(
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "tvos",
+            target_os = "watchos",
+            target_os = "visionos"
+        )
+    ),
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd"
+)))]
+#[cfg_attr(
+    docsrs,
+    doc(cfg(any(
+        not(target_vendor = "apple"),
+        not(target_os = "freebsd"),
+        not(target_os = "netbsd")
+        not(target_os = "openbsd")
+    )))
+)]
 mod if_change_notifier {
     use super::Interface;
     use std::collections::HashSet;
@@ -402,7 +452,7 @@ mod if_change_notifier {
     #[cfg(windows)]
     type InternalIfChangeNotifier = crate::windows::WindowsIfChangeNotifier;
     #[cfg(not(windows))]
-    type InternalIfChangeNotifier = crate::posix_not_mac::PosixIfChangeNotifier;
+    type InternalIfChangeNotifier = crate::posix_not_apple::PosixIfChangeNotifier;
 
     /// (Not available on iOS/macOS) A utility to monitor for interface changes
     /// and report them, so you can handle events such as WiFi
@@ -463,7 +513,30 @@ mod if_change_notifier {
     }
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+#[cfg(not(any(
+    all(
+        target_vendor = "apple",
+        any(
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "tvos",
+            target_os = "watchos",
+            target_os = "visionos"
+        )
+    ),
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd"
+)))]
+#[cfg_attr(
+    docsrs,
+    doc(cfg(any(
+        not(target_vendor = "apple"),
+        not(target_os = "freebsd"),
+        not(target_os = "netbsd"),
+        not(target_os = "openbsd")
+    )))
+)]
 pub use if_change_notifier::{IfChangeNotifier, IfChangeType};
 
 #[cfg(test)]
@@ -477,7 +550,7 @@ mod tests {
     use std::time::Duration;
 
     fn list_system_interfaces(cmd: &str, arg: &str) -> String {
-        let start_cmd = if arg == "" {
+        let start_cmd = if arg.is_empty() {
             Command::new(cmd).stdout(Stdio::piped()).spawn()
         } else {
             Command::new(cmd).arg(arg).stdout(Stdio::piped()).spawn()
@@ -485,7 +558,7 @@ mod tests {
         let mut process = match start_cmd {
             Err(why) => {
                 println!("couldn't start cmd {} : {}", cmd, why);
-                return "".to_string();
+                return String::new();
             }
             Ok(process) => process,
         };
@@ -538,9 +611,18 @@ mod tests {
 
     #[cfg(any(
         target_os = "freebsd",
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "tvos"
+        target_os = "netbsd",
+        target_os = "openbsd",
+        all(
+            target_vendor = "apple",
+            any(
+                target_os = "macos",
+                target_os = "ios",
+                target_os = "tvos",
+                target_os = "watchos",
+                target_os = "visionos"
+            )
+        )
     ))]
     fn list_system_addrs() -> Vec<IpAddr> {
         list_system_interfaces("ifconfig", "")
@@ -597,7 +679,21 @@ mod tests {
         }
     }
 
-    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    #[cfg(not(any(
+        all(
+            target_vendor = "apple",
+            any(
+                target_os = "macos",
+                target_os = "ios",
+                target_os = "tvos",
+                target_os = "watchos",
+                target_os = "visionos"
+            )
+        ),
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    )))]
     #[test]
     fn test_if_notifier() {
         // Check that the interface notifier can start up and time out. No easy

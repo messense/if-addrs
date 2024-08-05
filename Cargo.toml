@@ -5,7 +5,7 @@ license = "MIT OR BSD-3-Clause"
 name = "if-addrs"
 readme = "README.md"
 repository = "https://github.com/messense/if-addrs"
-version = "0.13.1"
+version = "0.13.2"
 edition = "2021"
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
@@ -25,3 +25,9 @@ features = [
 
 [features]
 link-local = []
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+targets = ["x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-pc-windows-msvc", "aarch64-apple-ios", "aarch64-apple-watchos", "aarch64-apple-tvos", "aarch64-apple-visionos"]
+cargo-args = ["-Z", "build-std"]
