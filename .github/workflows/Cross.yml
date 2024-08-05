@@ -38,11 +38,6 @@ jobs:
             tier3: true
           - target: aarch64-apple-visionos
             tier3: true
-        target:
-          - aarch64-apple-ios
-          - aarch64-apple-watchos
-          - aarch64-apple-tvos
-          - aarch64-apple-visionos
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
