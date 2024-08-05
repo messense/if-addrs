@@ -510,17 +510,28 @@ mod if_change_notifier {
     }
 }
 
-#[cfg(not(all(
-    target_vendor = "apple",
-    any(
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "tvos",
-        target_os = "watchos",
-        target_os = "visionos"
-    )
+#[cfg(not(any(
+    all(
+        target_vendor = "apple",
+        any(
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "tvos",
+            target_os = "watchos",
+            target_os = "visionos"
+        )
+    ),
+    target_os = "freebsd",
+    target_os = "netbsd",
 )))]
-#[cfg_attr(docsrs, doc(cfg(not(target_vendor = "apple"))))]
+#[cfg_attr(
+    docsrs,
+    doc(cfg(any(
+        not(target_vendor = "apple"),
+        not(target_os = "freebsd"),
+        not(target_os = "netbsd")
+    )))
+)]
 pub use if_change_notifier::{IfChangeNotifier, IfChangeType};
 
 #[cfg(test)]
