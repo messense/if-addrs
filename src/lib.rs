@@ -528,7 +528,7 @@ mod tests {
         };
         let mut process = match start_cmd {
             Err(why) => {
-                println!("couldn't start cmd {cmd} : {why}");
+                println!("couldn't start cmd {} : {}", cmd, why);
                 return String::new();
             }
             Ok(process) => process,
@@ -597,7 +597,7 @@ mod tests {
         list_system_interfaces("ifconfig", "")
             .lines()
             .filter_map(|line| {
-                println!("{line}");
+                println!("{}", line);
                 if line.contains("inet ") {
                     let addr_s: Vec<&str> = line.split_whitespace().collect();
                     return Some(IpAddr::V4(Ipv4Addr::from_str(addr_s[1]).unwrap()));
@@ -611,7 +611,7 @@ mod tests {
     fn test_get_if_addrs() {
         let ifaces = get_if_addrs().unwrap();
         println!("Local interfaces:");
-        println!("{ifaces:#?}");
+        println!("{:#?}", ifaces);
         // at least one loop back address
         assert!(
             1 <= ifaces
@@ -636,7 +636,7 @@ mod tests {
         assert!(!system_addrs.is_empty());
         for addr in system_addrs {
             let mut listed = false;
-            println!("\n checking whether {addr:?} has been properly listed \n");
+            println!("\n checking whether {:?} has been properly listed \n", addr);
             for interface in &ifaces {
                 if interface.addr.ip() == addr {
                     listed = true;
