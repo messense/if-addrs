@@ -26,7 +26,7 @@ jobs:
           args: --target=${{ matrix.target }}
 
   apple:
-    name: Apple Build
+    name: Apple Build on ${{ matrix.target }}
     runs-on: macos-latest
     strategy:
       matrix:
@@ -47,9 +47,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
+        if: ${{ !matrix.tier3 }}
         with:
-          toolchain: ${{ matrix.tier3 && 'nightly' || 'stable' }}
-          target: ${{ matrix.tier3 && '' || matrix.target }}
+          toolchain: 'stable'
+          targets: ${{ matrix.target }}
+          components: rust-src
+      - uses: dtolnay/rust-toolchain@master
+        if: ${{ matrix.tier3 }}
+        with:
+          toolchain: 'nightly'
           components: rust-src
 
       - name: Build
