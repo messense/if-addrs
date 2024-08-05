@@ -9,7 +9,19 @@
 
 #[cfg(not(windows))]
 mod posix;
-#[cfg(all(not(windows), not(any(target_os = "macos", target_os = "ios"))))]
+#[cfg(all(
+    not(windows),
+    not(all(
+        target_vendor = "apple",
+        any(
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "tvos",
+            target_os = "watchos",
+            target_os = "visionos"
+        )
+    ))
+))]
 mod posix_not_mac;
 mod sockaddr;
 #[cfg(windows)]
@@ -386,7 +398,16 @@ pub fn get_if_addrs() -> io::Result<Vec<Interface>> {
     getifaddrs_windows::get_if_addrs()
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+#[cfg(not(all(
+    target_vendor = "apple",
+    any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "tvos",
+        target_os = "watchos",
+        target_os = "visionos"
+    )
+)))]
 mod if_change_notifier {
     use super::Interface;
     use std::collections::HashSet;
@@ -463,7 +484,16 @@ mod if_change_notifier {
     }
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+#[cfg(not(all(
+    target_vendor = "apple",
+    any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "tvos",
+        target_os = "watchos",
+        target_os = "visionos"
+    )
+)))]
 pub use if_change_notifier::{IfChangeNotifier, IfChangeType};
 
 #[cfg(test)]
@@ -477,7 +507,7 @@ mod tests {
     use std::time::Duration;
 
     fn list_system_interfaces(cmd: &str, arg: &str) -> String {
-        let start_cmd = if arg == "" {
+        let start_cmd = if arg.is_empty() {
             Command::new(cmd).stdout(Stdio::piped()).spawn()
         } else {
             Command::new(cmd).arg(arg).stdout(Stdio::piped()).spawn()
@@ -538,9 +568,16 @@ mod tests {
 
     #[cfg(any(
         target_os = "freebsd",
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "tvos"
+        all(
+            target_vendor = "apple",
+            any(
+                target_os = "macos",
+                target_os = "ios",
+                target_os = "tvos",
+                target_os = "watchos",
+                target_os = "visionos"
+            )
+        )
     ))]
     fn list_system_addrs() -> Vec<IpAddr> {
         list_system_interfaces("ifconfig", "")
@@ -597,7 +634,16 @@ mod tests {
         }
     }
 
-    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    #[cfg(not(all(
+        target_vendor = "apple",
+        any(
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "tvos",
+            target_os = "watchos",
+            target_os = "visionos"
+        )
+    )))]
     #[test]
     fn test_if_notifier() {
         // Check that the interface notifier can start up and time out. No easy

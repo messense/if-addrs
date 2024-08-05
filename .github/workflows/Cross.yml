@@ -27,22 +27,32 @@ jobs:
           args: --target=${{ matrix.target }}
 
   ios:
-    name: iOS Build
+    name: Apple Build
     runs-on: macos-latest
     strategy:
       matrix:
+        include:
+          - target: aarch64-apple-ios
+            tier3: false
+          - target: aarch64-apple-watchos
+            tier3: true
+          - target: aarch64-apple-tvos
+            tier3: true
+          - target: aarch64-apple-visionos
+            tier3: true
         target:
           - aarch64-apple-ios
-          - x86_64-apple-ios
+          - aarch64-apple-watchos
+          - aarch64-apple-tvos
+          - aarch64-apple-visionos
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: stable
+          toolchain: ${{ matrix.tier3 ?? 'nightly' || 'stable' }}
           target: ${{ matrix.target }}
           override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: build
-          args: --target=${{ matrix.target }}
+          components: rust-src
+
+      - uses: Build
+        run: cargo build --target ${{ matrix.target }} ${{ matrix.tier3 ?? '-Zbuild-std' : '' }}
