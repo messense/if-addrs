@@ -14,12 +14,11 @@ jobs:
         target:
           - aarch64-linux-android
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
           target: ${{ matrix.target }}
-          override: true
       - uses: actions-rs/cargo@v1
         with:
           use-cross: true
@@ -50,8 +49,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.tier3 && 'nightly' || 'stable' }}
-          target: ${{ matrix.target }}
-          override: true
+          target: ${{ matrix.tier3 && '' || matrix.target }}
           components: rust-src
 
       - name: Build
