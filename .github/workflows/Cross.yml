@@ -19,11 +19,8 @@ jobs:
         with:
           toolchain: stable
           target: ${{ matrix.target }}
-      - uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: build
-          args: --target=${{ matrix.target }}
+      - name: Build
+        run: cargo build --target=${{ matrix.target }}
 
   apple:
     name: Apple Build on ${{ matrix.target }}
