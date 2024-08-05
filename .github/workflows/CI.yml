@@ -7,15 +7,12 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
           toolchain: stable
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
+      - name: Run check
+        run: cargo check
 
   test:
     name: Test Suite
@@ -25,49 +22,40 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         rust: ["1.56.0", stable]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: maxim-lobanov/setup-xcode@v1
         if: ${{ matrix.os == 'macos-latest' && matrix.rust == '1.56.0' }}
         with:
           xcode-version: latest-stable
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: true
       - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
+        run: cargo build
       - name: Test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: -- --show-output
+        run: cargo test -- --show-output
 
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
+          components: rustfmt
           toolchain: stable
-          override: true
-      - run: rustup component add rustfmt
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+      - name: Run fmt
+        run: cargo fmt --all -- --check
 
   clippy_check:
     name: Clippy Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
-      - run: rustup component add clippy
-      - uses: actions-rs/clippy-check@v1
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-features
+          toolchain: ${{ matrix.rust }}
+          components: clippy
+      - uses: r7kamura/rust-problem-matchers@9fe7ca9f6550e5d6358e179d451cc25ea6b54f98 #v1.5.0
+      - name: Run clippy
+        run: cargo clippy --all-features
