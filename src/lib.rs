@@ -410,7 +410,7 @@ pub fn get_if_addrs() -> io::Result<Vec<Interface>> {
         target_os = "visionos"
     )
 )))]
-#[doc(cfg(not(target_vendor = "apple")))]
+#[cfg_attr(docsrs, doc(cfg(not(target_vendor = "apple"))))]
 mod if_change_notifier {
     use super::Interface;
     use std::collections::HashSet;
@@ -497,7 +497,7 @@ mod if_change_notifier {
         target_os = "visionos"
     )
 )))]
-#[doc(cfg(not(target_vendor = "apple")))]
+#[cfg_attr(docsrs, doc(cfg(not(target_vendor = "apple"))))]
 pub use if_change_notifier::{IfChangeNotifier, IfChangeType};
 
 #[cfg(test)]
