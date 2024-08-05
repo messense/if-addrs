@@ -25,6 +25,7 @@ mod posix;
     )),
     not(target_os = "freebsd"),
     not(target_os = "netbsd"),
+    not(target_os = "openbsd")
 ))]
 mod posix_not_apple;
 mod sockaddr;
@@ -425,6 +426,7 @@ pub fn get_if_addrs() -> io::Result<Vec<Interface>> {
     ),
     target_os = "freebsd",
     target_os = "netbsd",
+    target_os = "openbsd"
 )))]
 #[cfg_attr(
     docsrs,
@@ -432,6 +434,7 @@ pub fn get_if_addrs() -> io::Result<Vec<Interface>> {
         not(target_vendor = "apple"),
         not(target_os = "freebsd"),
         not(target_os = "netbsd")
+        not(target_os = "openbsd")
     )))
 )]
 mod if_change_notifier {
@@ -523,13 +526,15 @@ mod if_change_notifier {
     ),
     target_os = "freebsd",
     target_os = "netbsd",
+    target_os = "openbsd"
 )))]
 #[cfg_attr(
     docsrs,
     doc(cfg(any(
         not(target_vendor = "apple"),
         not(target_os = "freebsd"),
-        not(target_os = "netbsd")
+        not(target_os = "netbsd"),
+        not(target_os = "openbsd")
     )))
 )]
 pub use if_change_notifier::{IfChangeNotifier, IfChangeType};
@@ -606,6 +611,8 @@ mod tests {
 
     #[cfg(any(
         target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd",
         all(
             target_vendor = "apple",
             any(
@@ -685,6 +692,7 @@ mod tests {
         ),
         target_os = "freebsd",
         target_os = "netbsd",
+        target_os = "openbsd"
     )))]
     #[test]
     fn test_if_notifier() {
