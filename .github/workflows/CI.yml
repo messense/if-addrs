@@ -27,9 +27,7 @@ jobs:
         if: ${{ matrix.os == 'macos-latest' && matrix.rust == '1.56.0' }}
         with:
           xcode-version: latest-stable
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ matrix.rust }}
+      - uses: dtolnay/rust-toolchain@${{ matrix.rust }}
       - name: Build
         run: cargo build
       - name: Test
