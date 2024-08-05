@@ -51,16 +51,19 @@ pub struct Interface {
 
 impl Interface {
     /// Check whether this is a loopback interface.
+    #[must_use]
     pub const fn is_loopback(&self) -> bool {
         self.addr.is_loopback()
     }
 
     /// Check whether this is a link local interface.
+    #[must_use]
     pub const fn is_link_local(&self) -> bool {
         self.addr.is_link_local()
     }
 
     /// Get the IP address of this interface.
+    #[must_use]
     pub const fn ip(&self) -> IpAddr {
         self.addr.ip()
     }
@@ -77,6 +80,7 @@ pub enum IfAddr {
 
 impl IfAddr {
     /// Check whether this is a loopback address.
+    #[must_use]
     pub const fn is_loopback(&self) -> bool {
         match *self {
             IfAddr::V4(ref ifv4_addr) => ifv4_addr.is_loopback(),
@@ -85,6 +89,7 @@ impl IfAddr {
     }
 
     /// Check whether this is a link local interface.
+    #[must_use]
     pub const fn is_link_local(&self) -> bool {
         match *self {
             IfAddr::V4(ref ifv4_addr) => ifv4_addr.is_link_local(),
@@ -93,6 +98,7 @@ impl IfAddr {
     }
 
     /// Get the IP address of this interface address.
+    #[must_use]
     pub const fn ip(&self) -> IpAddr {
         match *self {
             IfAddr::V4(ref ifv4_addr) => IpAddr::V4(ifv4_addr.ip),
@@ -116,11 +122,13 @@ pub struct Ifv4Addr {
 
 impl Ifv4Addr {
     /// Check whether this is a loopback address.
+    #[must_use]
     pub const fn is_loopback(&self) -> bool {
         self.ip.is_loopback()
     }
 
     /// Check whether this is a link local address.
+    #[must_use]
     pub const fn is_link_local(&self) -> bool {
         self.ip.is_link_local()
     }
@@ -141,11 +149,13 @@ pub struct Ifv6Addr {
 
 impl Ifv6Addr {
     /// Check whether this is a loopback address.
+    #[must_use]
     pub const fn is_loopback(&self) -> bool {
         self.ip.is_loopback()
     }
 
     /// Check whether this is a link local address.
+    #[must_use]
     pub const fn is_link_local(&self) -> bool {
         let bytes = self.ip.octets();
 
@@ -518,8 +528,8 @@ mod tests {
         };
         let mut process = match start_cmd {
             Err(why) => {
-                println!("couldn't start cmd {} : {}", cmd, why);
-                return "".to_string();
+                println!("couldn't start cmd {cmd} : {why}");
+                return String::new();
             }
             Ok(process) => process,
         };
@@ -587,7 +597,7 @@ mod tests {
         list_system_interfaces("ifconfig", "")
             .lines()
             .filter_map(|line| {
-                println!("{}", line);
+                println!("{line}");
                 if line.contains("inet ") {
                     let addr_s: Vec<&str> = line.split_whitespace().collect();
                     return Some(IpAddr::V4(Ipv4Addr::from_str(addr_s[1]).unwrap()));
@@ -601,7 +611,7 @@ mod tests {
     fn test_get_if_addrs() {
         let ifaces = get_if_addrs().unwrap();
         println!("Local interfaces:");
-        println!("{:#?}", ifaces);
+        println!("{ifaces:#?}");
         // at least one loop back address
         assert!(
             1 <= ifaces
@@ -626,7 +636,7 @@ mod tests {
         assert!(!system_addrs.is_empty());
         for addr in system_addrs {
             let mut listed = false;
-            println!("\n checking whether {:?} has been properly listed \n", addr);
+            println!("\n checking whether {addr:?} has been properly listed \n");
             for interface in &ifaces {
                 if interface.addr.ip() == addr {
                     listed = true;
