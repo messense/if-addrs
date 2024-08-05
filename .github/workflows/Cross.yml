@@ -49,10 +49,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ matrix.tier3 ?? 'nightly' || 'stable' }}
+          toolchain: ${{ matrix.tier3 && 'nightly' || 'stable' }}
           target: ${{ matrix.target }}
           override: true
           components: rust-src
 
       - name: Build
-        run: cargo build --target ${{ matrix.target }} ${{ matrix.tier3 ?? '-Zbuild-std' || '' }}
+        run: cargo build --target ${{ matrix.target }} ${{ matrix.tier3 && '-Zbuild-std' || '' }}
