@@ -32,7 +32,7 @@ struct SockAddr {
 impl SockAddr {
     #[allow(clippy::new_ret_no_self)]
     fn new(sockaddr: *const sockaddr) -> Option<Self> {
-        NonNull::new(sockaddr.cast_mut()).map(|inner| Self { inner })
+        NonNull::new(sockaddr as *mut _).map(|inner| Self { inner })
     }
 
     #[cfg(not(windows))]
