@@ -593,7 +593,7 @@ mod tests {
             .collect()
     }
 
-    #[cfg(any(target_os = "linux", target_os = "android", target_os = "nacl"))]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     fn list_system_addrs() -> Vec<IpAddr> {
         list_system_interfaces("ip", "addr")
             .lines()

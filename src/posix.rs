@@ -21,7 +21,6 @@ pub fn do_broadcast(ifaddr: &ifaddrs) -> Option<IpAddr> {
         target_os = "emscripten",
         target_os = "fuchsia",
         target_os = "hurd",
-        target_os = "nacl",
     ))]
     let sockaddr = ifaddr.ifa_ifu;
 
@@ -33,7 +32,6 @@ pub fn do_broadcast(ifaddr: &ifaddrs) -> Option<IpAddr> {
         target_os = "emscripten",
         target_os = "fuchsia",
         target_os = "hurd",
-        target_os = "nacl",
     )))]
     let sockaddr = ifaddr.ifa_dstaddr;
 
