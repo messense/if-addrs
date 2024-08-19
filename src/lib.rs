@@ -433,7 +433,7 @@ pub fn get_if_addrs() -> io::Result<Vec<Interface>> {
     doc(cfg(any(
         not(target_vendor = "apple"),
         not(target_os = "freebsd"),
-        not(target_os = "netbsd")
+        not(target_os = "netbsd"),
         not(target_os = "openbsd")
     )))
 )]
