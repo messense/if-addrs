@@ -361,7 +361,7 @@ mod getifaddrs_windows {
                                         let x_word = ipv6_addr.segments()[n];
                                         let y_word = a.segments()[n];
                                         for m in 0..16 {
-                                            if (n * 16) + m > prefix.PrefixLength as usize {
+                                            if (n * 16) + m >= prefix.PrefixLength as usize {
                                                 break;
                                             }
                                             let bit = 1 << (15 - m);
