@@ -306,7 +306,7 @@ mod getifaddrs_windows {
                                         let x_byte = ipv4_addr.octets()[n];
                                         let y_byte = a.octets()[n];
                                         for m in 0..8 {
-                                            if (n * 8) + m > prefix.PrefixLength as usize {
+                                            if (n * 8) + m >= prefix.PrefixLength as usize {
                                                 break;
                                             }
                                             let bit = 1 << (7 - m);
@@ -361,7 +361,7 @@ mod getifaddrs_windows {
                                         let x_word = ipv6_addr.segments()[n];
                                         let y_word = a.segments()[n];
                                         for m in 0..16 {
-                                            if (n * 16) + m > prefix.PrefixLength as usize {
+                                            if (n * 16) + m >= prefix.PrefixLength as usize {
                                                 break;
                                             }
                                             let bit = 1 << (15 - m);
