@@ -223,7 +223,7 @@ impl WindowsIfChangeNotifier {
     pub fn new() -> io::Result<Self> {
         let (tx, rx) = channel();
         let mut ret = Self {
-            handle: 0,
+            handle: std::ptr::null_mut(),
             tx: Box::into_raw(Box::new(tx)),
             rx,
         };
@@ -273,7 +273,7 @@ impl WindowsIfChangeNotifier {
 
 impl Drop for WindowsIfChangeNotifier {
     fn drop(&mut self) {
-        if self.handle != 0 {
+        if !self.handle.is_null() {
             unsafe { CancelMibChangeNotify2(self.handle) };
         }
         unsafe { drop(Box::from_raw(self.tx)) };
