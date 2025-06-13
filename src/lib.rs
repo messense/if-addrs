@@ -45,6 +45,10 @@ pub struct Interface {
     pub addr: IfAddr,
     /// The index of the interface.
     pub index: Option<u32>,
+
+    /// Whether the interface is up.
+    pub is_up: bool,
+
     /// (Windows only) A permanent and unique identifier for the interface. It
     /// cannot be modified by the user. It is typically a GUID string of the
     /// form: "{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}", but this is not
@@ -178,6 +182,10 @@ mod getifaddrs_posix {
     use std::io;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
+    /// Defined in `<net/if.h>` on POSIX systems.
+    /// https://github.com/torvalds/linux/blob/18531f4d1c8c47c4796289dbbc1ab657ffa063d2/include/uapi/linux/if.h#L85
+    const POSIX_IFF_UP: u32 = 0x1;
+
     /// Return a vector of IP details for all the valid interfaces on this host.
     #[allow(unsafe_code)]
     pub fn get_if_addrs() -> io::Result<Vec<Interface>> {
@@ -254,7 +262,15 @@ mod getifaddrs_posix {
                     Some(index)
                 }
             };
-            ret.push(Interface { name, addr, index });
+
+            let is_up = (ifaddr.ifa_flags & POSIX_IFF_UP) != 0;
+
+            ret.push(Interface {
+                name,
+                addr,
+                index,
+                is_up,
+            });
         }
 
         Ok(ret)
@@ -282,6 +298,7 @@ mod getifaddrs_windows {
         let ifaddrs = IfAddrs::new()?;
 
         for ifaddr in ifaddrs.iter() {
+            let is_up = ifaddr.is_up();
             for addr in ifaddr.unicast_addresses() {
                 if addr.DadState != IpDadStatePreferred {
                     continue;
@@ -399,6 +416,7 @@ mod getifaddrs_windows {
                     name: ifaddr.name(),
                     addr,
                     index,
+                    is_up,
                     adapter_name: ifaddr.adapter_name(),
                 });
             }
@@ -554,11 +572,18 @@ mod tests {
     use std::thread;
     use std::time::Duration;
 
-    fn list_system_interfaces(cmd: &str, arg: &str) -> String {
-        let start_cmd = if arg.is_empty() {
+    fn list_system_interfaces(cmd: &str, args: &[&str]) -> String {
+        let start_cmd = if args.is_empty() {
             Command::new(cmd).stdout(Stdio::piped()).spawn()
+        } else if args.len() == 1 {
+            let arg1 = args[0];
+            if arg1.is_empty() {
+                Command::new(cmd).stdout(Stdio::piped()).spawn()
+            } else {
+                Command::new(cmd).arg(arg1).stdout(Stdio::piped()).spawn()
+            }
         } else {
-            Command::new(cmd).arg(arg).stdout(Stdio::piped()).spawn()
+            Command::new(cmd).args(args).stdout(Stdio::piped()).spawn()
         };
         let mut process = match start_cmd {
             Err(why) => {
@@ -579,9 +604,10 @@ mod tests {
     }
 
     #[cfg(windows)]
-    fn list_system_addrs() -> Vec<IpAddr> {
+    fn list_system_addrs() -> (Vec<IpAddr>, Vec<(String, bool)>) {
         use std::net::Ipv6Addr;
-        list_system_interfaces("ipconfig", "")
+        let intf_list = list_system_interfaces("ipconfig", &[""]);
+        let ipaddr_list = intf_list
             .lines()
             .filter_map(|line| {
                 println!("{}", line);
@@ -595,12 +621,33 @@ mod tests {
                 }
                 None
             })
-            .collect()
+            .collect();
+
+        let netsh_list =
+            list_system_interfaces("netsh", &["interface", "ipv4", "show", "interfaces"]);
+        let ipv4_status_vec: Vec<_> = netsh_list
+            .lines()
+            .filter_map(|line| {
+                if !line.contains("Idx") && !line.contains("---") && !line.is_empty() {
+                    let columns: Vec<&str> = line.split_whitespace().collect();
+                    let status = columns[3].trim().to_string();
+                    let is_up = status == "connected";
+
+                    // concat the strings in columns[4] and beyond
+                    let intf_name = columns[4..].join(" ");
+                    return Some((intf_name, is_up));
+                }
+                None
+            })
+            .collect();
+
+        (ipaddr_list, ipv4_status_vec)
     }
 
     #[cfg(any(target_os = "linux", target_os = "android"))]
-    fn list_system_addrs() -> Vec<IpAddr> {
-        list_system_interfaces("ip", "addr")
+    fn list_system_addrs() -> (Vec<IpAddr>, Vec<(String, bool)>) {
+        let intf_list = list_system_interfaces("ip", &["addr"]);
+        let ipaddr_list = intf_list
             .lines()
             .filter_map(|line| {
                 println!("{}", line);
@@ -611,7 +658,17 @@ mod tests {
                 }
                 None
             })
-            .collect()
+            .collect();
+        let mut intf_status_vec = Vec::new();
+        for line in intf_list.lines() {
+            if !line.starts_with(' ') && !line.is_empty() {
+                let name_s: Vec<&str> = line.split(':').collect();
+                let is_up = !line.contains("state DOWN");
+                intf_status_vec.push((name_s[1].trim().to_string(), is_up));
+            }
+        }
+
+        (ipaddr_list, intf_status_vec)
     }
 
     #[cfg(any(
@@ -630,8 +687,9 @@ mod tests {
             )
         )
     ))]
-    fn list_system_addrs() -> Vec<IpAddr> {
-        list_system_interfaces("ifconfig", "")
+    fn list_system_addrs() -> (Vec<IpAddr>, Vec<(String, bool)>) {
+        let intf_list = list_system_interfaces("ifconfig", &[""]);
+        let ipaddr_list = intf_list
             .lines()
             .filter_map(|line| {
                 println!("{}", line);
@@ -641,7 +699,22 @@ mod tests {
                 }
                 None
             })
-            .collect()
+            .collect();
+
+        let mut intf_status_vec = Vec::new();
+        for line in intf_list.lines() {
+            if !line.starts_with('\t') && !line.is_empty() {
+                let name_s: Vec<&str> = line.split(':').collect();
+                let is_up = line.contains("<UP");
+                intf_status_vec.push((name_s[0].to_string(), is_up));
+            } else if line.contains("status: inactive") {
+                if let Some(last) = intf_status_vec.last_mut() {
+                    last.1 = false;
+                }
+            }
+        }
+
+        (ipaddr_list, intf_status_vec)
     }
 
     #[test]
@@ -669,7 +742,7 @@ mod tests {
         assert_eq!(1, ifaces.iter().filter(is_loopback).count());
 
         // each system address shall be listed
-        let system_addrs = list_system_addrs();
+        let (system_addrs, intf_status_list) = list_system_addrs();
         assert!(!system_addrs.is_empty());
         for addr in system_addrs {
             let mut listed = false;
@@ -682,6 +755,21 @@ mod tests {
                 assert!(interface.index.is_some());
             }
             assert!(listed);
+        }
+
+        println!("Interface status list: {:#?}", intf_status_list);
+        for (intf_name, is_up) in intf_status_list {
+            for interface in &ifaces {
+                if interface.name == intf_name {
+                    if interface.is_up != is_up {
+                        println!(
+                            "Interface {} status mismatch: listed {}, actual {}",
+                            intf_name, is_up, interface.is_up
+                        );
+                    }
+                    assert_eq!(interface.is_up, is_up);
+                }
+            }
         }
     }
 
