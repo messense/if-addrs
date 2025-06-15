@@ -46,8 +46,8 @@ pub struct Interface {
     /// The index of the interface.
     pub index: Option<u32>,
 
-    /// Whether the interface is up.
-    pub is_up: bool,
+    /// Whether the interface is operational up.
+    pub is_oper_up: bool,
 
     /// (Windows only) A permanent and unique identifier for the interface. It
     /// cannot be modified by the user. It is typically a GUID string of the
@@ -184,7 +184,7 @@ mod getifaddrs_posix {
 
     /// Defined in `<net/if.h>` on POSIX systems.
     /// https://github.com/torvalds/linux/blob/18531f4d1c8c47c4796289dbbc1ab657ffa063d2/include/uapi/linux/if.h#L85
-    const POSIX_IFF_UP: u32 = 0x1;
+    const POSIX_IFF_RUNNING: u32 = 0x40; // 1<<6
 
     /// Return a vector of IP details for all the valid interfaces on this host.
     #[allow(unsafe_code)]
@@ -263,13 +263,13 @@ mod getifaddrs_posix {
                 }
             };
 
-            let is_up = (ifaddr.ifa_flags & POSIX_IFF_UP) != 0;
+            let is_up = (ifaddr.ifa_flags & POSIX_IFF_RUNNING) != 0;
 
             ret.push(Interface {
                 name,
                 addr,
                 index,
-                is_up,
+                is_oper_up: is_up,
             });
         }
 
@@ -761,13 +761,13 @@ mod tests {
         for (intf_name, is_up) in intf_status_list {
             for interface in &ifaces {
                 if interface.name == intf_name {
-                    if interface.is_up != is_up {
+                    if interface.is_oper_up != is_up {
                         println!(
                             "Interface {} status mismatch: listed {}, actual {}",
-                            intf_name, is_up, interface.is_up
+                            intf_name, is_up, interface.is_oper_up
                         );
                     }
-                    assert_eq!(interface.is_up, is_up);
+                    assert_eq!(interface.is_oper_up, is_up);
                 }
             }
         }
