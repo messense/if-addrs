@@ -184,7 +184,10 @@ mod getifaddrs_posix {
 
     /// Defined in `<net/if.h>` on POSIX systems.
     /// https://github.com/torvalds/linux/blob/18531f4d1c8c47c4796289dbbc1ab657ffa063d2/include/uapi/linux/if.h#L85
+    #[cfg(not(target_os = "illumos"))]
     const POSIX_IFF_RUNNING: u32 = 0x40; // 1<<6
+    #[cfg(target_os = "illumos")]
+    const POSIX_IFF_RUNNING: u64 = 0x40; // 1<<6
 
     /// Return a vector of IP details for all the valid interfaces on this host.
     #[allow(unsafe_code)]
