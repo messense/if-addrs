@@ -263,13 +263,13 @@ mod getifaddrs_posix {
                 }
             };
 
-            let is_up = (ifaddr.ifa_flags & POSIX_IFF_RUNNING) != 0;
+            let is_oper_up = (ifaddr.ifa_flags & POSIX_IFF_RUNNING) != 0;
 
             ret.push(Interface {
                 name,
                 addr,
                 index,
-                is_oper_up: is_up,
+                is_oper_up,
             });
         }
 
@@ -298,7 +298,7 @@ mod getifaddrs_windows {
         let ifaddrs = IfAddrs::new()?;
 
         for ifaddr in ifaddrs.iter() {
-            let is_up = ifaddr.is_up();
+            let is_oper_up = ifaddr.is_up();
             for addr in ifaddr.unicast_addresses() {
                 if addr.DadState != IpDadStatePreferred {
                     continue;
@@ -416,7 +416,7 @@ mod getifaddrs_windows {
                     name: ifaddr.name(),
                     addr,
                     index,
-                    is_up,
+                    is_oper_up,
                     adapter_name: ifaddr.adapter_name(),
                 });
             }
