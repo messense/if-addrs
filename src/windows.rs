@@ -24,8 +24,7 @@ use windows_sys::Win32::System::Memory::{
     GetProcessHeap, HeapAlloc, HeapFree, HEAP_NONE, HEAP_ZERO_MEMORY,
 };
 
-#[cfg(windows)]
-const WINDOWS_IF_OPER_STATUS_UP: i32 = 1;
+use crate::IfOperStatus;
 
 #[repr(transparent)]
 pub struct IpAdapterAddresses(*const IP_ADAPTER_ADDRESSES_LH);
@@ -79,8 +78,8 @@ impl IpAdapterAddresses {
         }
     }
 
-    pub fn is_up(&self) -> bool {
-        unsafe { (*self.0).OperStatus == WINDOWS_IF_OPER_STATUS_UP }
+    pub fn oper_status(&self) -> IfOperStatus {
+        unsafe { (*self.0).OperStatus.into() }
     }
 }
 

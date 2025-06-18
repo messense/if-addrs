@@ -36,6 +36,51 @@ mod windows;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
+/// The current operational state of the interface, as defined in RFC 2863 section 6.
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub enum IfOperStatus {
+    /// The interface is up and running.
+    Up = 1,
+
+    /// The interface is down.
+    Down = 2,
+
+    /// The interface is testing.
+    Testing = 3,
+
+    /// The interface is unknown.
+    Unknown = 4,
+
+    /// The interface is in a "pending" state, waiting for some external event.
+    Dormant = 5,
+
+    /// A refinement on the down state which indicates that the relevant
+    /// interface is down specifically because some component (typically,
+    /// a hardware component) is not present in the managed system.
+    NotPresent = 6,
+
+    /// A refinement on the down state. This new state indicates
+    /// that this interface runs on top of one or more other interfaces and
+    /// that this interface is down specifically because one or more of these
+    /// lower-layer interfaces are down.
+    LowerLayerDown = 7,
+}
+
+impl From<i32> for IfOperStatus {
+    fn from(value: i32) -> Self {
+        match value {
+            1 => Self::Up,
+            2 => Self::Down,
+            3 => Self::Testing,
+            4 => Self::Unknown,
+            5 => Self::Dormant,
+            6 => Self::NotPresent,
+            7 => Self::LowerLayerDown,
+            _ => Self::Unknown,
+        }
+    }
+}
+
 /// Details about an interface on this host.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Interface {
@@ -47,7 +92,7 @@ pub struct Interface {
     pub index: Option<u32>,
 
     /// Whether the interface is operational up.
-    pub is_oper_up: bool,
+    pub oper_status: IfOperStatus,
 
     /// (Windows only) A permanent and unique identifier for the interface. It
     /// cannot be modified by the user. It is typically a GUID string of the
@@ -74,6 +119,12 @@ impl Interface {
     #[must_use]
     pub const fn ip(&self) -> IpAddr {
         self.addr.ip()
+    }
+
+    /// Check whether this interface is operationally up.
+    #[must_use]
+    pub fn is_oper_up(&self) -> bool {
+        self.oper_status == IfOperStatus::Up
     }
 }
 
@@ -178,6 +229,7 @@ mod getifaddrs_posix {
     use super::{IfAddr, Ifv4Addr, Ifv6Addr, Interface};
     use crate::posix::{self as ifaddrs, IfAddrs};
     use crate::sockaddr;
+    use crate::IfOperStatus;
     use std::ffi::CStr;
     use std::io;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -266,13 +318,17 @@ mod getifaddrs_posix {
                 }
             };
 
-            let is_oper_up = (ifaddr.ifa_flags & POSIX_IFF_RUNNING) != 0;
+            let oper_status = if ifaddr.ifa_flags & POSIX_IFF_RUNNING != 0 {
+                IfOperStatus::Up
+            } else {
+                IfOperStatus::Unknown
+            };
 
             ret.push(Interface {
                 name,
                 addr,
                 index,
-                is_oper_up,
+                oper_status,
             });
         }
 
@@ -301,7 +357,6 @@ mod getifaddrs_windows {
         let ifaddrs = IfAddrs::new()?;
 
         for ifaddr in ifaddrs.iter() {
-            let is_oper_up = ifaddr.is_up();
             for addr in ifaddr.unicast_addresses() {
                 if addr.DadState != IpDadStatePreferred {
                     continue;
@@ -415,11 +470,13 @@ mod getifaddrs_windows {
                     IfAddr::V4(_) => ifaddr.ipv4_index(),
                     IfAddr::V6(_) => ifaddr.ipv6_index(),
                 };
+                let oper_status = ifaddr.oper_status();
+
                 ret.push(Interface {
                     name: ifaddr.name(),
                     addr,
                     index,
-                    is_oper_up,
+                    oper_status,
                     adapter_name: ifaddr.adapter_name(),
                 });
             }
@@ -607,6 +664,7 @@ mod tests {
     }
 
     #[cfg(windows)]
+    /// Returns (IP-addr-list, IPv4-interface-status-list)
     fn list_system_addrs() -> (Vec<IpAddr>, Vec<(String, bool)>) {
         use std::net::Ipv6Addr;
         let intf_list = list_system_interfaces("ipconfig", &[""]);
@@ -626,8 +684,20 @@ mod tests {
             })
             .collect();
 
+        /* An example on Windows:
+           > netsh interface ipv4 show interfaces
+
+           Idx     Met         MTU          State                Name
+           ---  ----------  ----------  ------------  ---------------------------
+           1          75  4294967295  connected     Loopback Pseudo-Interface 1
+           17          35        1500  connected     Wi-Fi
+           13          25        1500  disconnected  Local Area Connection* 1
+           14          25        1500  disconnected  Local Area Connection* 2
+           12          65        1500  disconnected  Bluetooth Network Connection
+        */
         let netsh_list =
             list_system_interfaces("netsh", &["interface", "ipv4", "show", "interfaces"]);
+
         let ipv4_status_vec: Vec<_> = netsh_list
             .lines()
             .filter_map(|line| {
@@ -648,6 +718,7 @@ mod tests {
     }
 
     #[cfg(any(target_os = "linux", target_os = "android"))]
+    /// Returns (IP-addr-list, interface-status-list)
     fn list_system_addrs() -> (Vec<IpAddr>, Vec<(String, bool)>) {
         let intf_list = list_system_interfaces("ip", &["addr"]);
         let ipaddr_list = intf_list
@@ -690,6 +761,7 @@ mod tests {
             )
         )
     ))]
+    /// Returns (IP-addr-list, interface-status-list)
     fn list_system_addrs() -> (Vec<IpAddr>, Vec<(String, bool)>) {
         let intf_list = list_system_interfaces("ifconfig", &[""]);
         let ipaddr_list = intf_list
@@ -706,13 +778,24 @@ mod tests {
 
         let mut intf_status_vec = Vec::new();
         for line in intf_list.lines() {
+            // One example on macOS:
+            /*
+            en0: flags=8863<UP,BROADCAST,SMART,RUNNING,SIMPLEX,MULTICAST> mtu 1500
+                options=6460<TSO4,TSO6,CHANNEL_IO,PARTIAL_CSUM,ZEROINVERT_CSUM>
+                ether c6:0e:5e:f8:5d:f4
+                inet6 fe80::c02:ea58:92f4:be76%en0 prefixlen 64 secured scopeid 0xb
+                inet 192.168.0.112 netmask 0xffffff00 broadcast 192.168.0.255
+                nd6 options=201<PERFORMNUD,DAD>
+                media: autoselect
+                status: active
+             */
             if !line.starts_with('\t') && !line.is_empty() {
                 let name_s: Vec<&str> = line.split(':').collect();
-                let is_up = line.contains("<UP");
-                intf_status_vec.push((name_s[0].to_string(), is_up));
+                let is_admin_up = line.contains("<UP");
+                intf_status_vec.push((name_s[0].to_string(), is_admin_up));
             } else if line.contains("status: inactive") {
-                if let Some(last) = intf_status_vec.last_mut() {
-                    last.1 = false;
+                if let Some(current_intf) = intf_status_vec.last_mut() {
+                    current_intf.1 = false; // overwrite the admin up
                 }
             }
         }
@@ -764,13 +847,13 @@ mod tests {
         for (intf_name, is_up) in intf_status_list {
             for interface in &ifaces {
                 if interface.name == intf_name {
-                    if interface.is_oper_up != is_up {
+                    if interface.is_oper_up() != is_up {
                         println!(
-                            "Interface {} status mismatch: listed {}, actual {}",
-                            intf_name, is_up, interface.is_oper_up
+                            "Interface {} status mismatch: listed {}, detected {:?}",
+                            intf_name, is_up, interface.oper_status
                         );
                     }
-                    assert_eq!(interface.is_oper_up, is_up);
+                    assert_eq!(interface.is_oper_up(), is_up);
                 }
             }
         }
