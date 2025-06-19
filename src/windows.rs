@@ -24,6 +24,8 @@ use windows_sys::Win32::System::Memory::{
     GetProcessHeap, HeapAlloc, HeapFree, HEAP_NONE, HEAP_ZERO_MEMORY,
 };
 
+use crate::IfOperStatus;
+
 #[repr(transparent)]
 pub struct IpAdapterAddresses(*const IP_ADAPTER_ADDRESSES_LH);
 
@@ -74,6 +76,10 @@ impl IpAdapterAddresses {
             _head: unsafe { &*self.0 },
             next: unsafe { (*self.0).FirstUnicastAddress },
         }
+    }
+
+    pub fn oper_status(&self) -> IfOperStatus {
+        unsafe { (*self.0).OperStatus.into() }
     }
 }
 
