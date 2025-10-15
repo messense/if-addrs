@@ -64,14 +64,14 @@ impl IpAdapterAddresses {
         }
     }
 
-    pub fn prefixes(&self) -> PrefixesIterator {
+    pub fn prefixes(&self) -> PrefixesIterator<'_> {
         PrefixesIterator {
             _head: unsafe { &*self.0 },
             next: unsafe { (*self.0).FirstPrefix },
         }
     }
 
-    pub fn unicast_addresses(&self) -> UnicastAddressesIterator {
+    pub fn unicast_addresses(&self) -> UnicastAddressesIterator<'_> {
         UnicastAddressesIterator {
             _head: unsafe { &*self.0 },
             next: unsafe { (*self.0).FirstUnicastAddress },
@@ -132,7 +132,7 @@ impl IfAddrs {
         })
     }
 
-    pub fn iter(&self) -> IfAddrsIterator {
+    pub fn iter(&self) -> IfAddrsIterator<'_> {
         IfAddrsIterator {
             _head: self,
             next: self.inner.0,
@@ -256,7 +256,7 @@ impl WindowsIfChangeNotifier {
                 AF_UNSPEC,
                 Some(if_change_callback),
                 ret.tx as *const c_void,
-                0,
+                false,
                 &mut ret.handle,
             )
         };

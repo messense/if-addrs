@@ -20,17 +20,17 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        rust: ["1.64.0", stable]
+        rust: ["1.71.0", stable]
     steps:
       - uses: actions/checkout@v4
       - uses: maxim-lobanov/setup-xcode@v1
-        if: ${{ matrix.os == 'macos-latest' && matrix.rust == '1.64.0' }}
+        if: ${{ matrix.os == 'macos-latest' && matrix.rust == '1.71.0' }}
         with:
           xcode-version: latest-stable
       - uses: dtolnay/rust-toolchain@stable
         if: ${{ matrix.rust == 'stable' }}
-      - uses: dtolnay/rust-toolchain@1.64.0
-        if: ${{ matrix.rust == '1.64.0' }}
+      - uses: dtolnay/rust-toolchain@1.71.0
+        if: ${{ matrix.rust == '1.71.0' }}
       - name: Build
         run: cargo build
       - name: Test
