@@ -81,6 +81,14 @@ impl IpAdapterAddresses {
     pub fn oper_status(&self) -> IfOperStatus {
         unsafe { (*self.0).OperStatus.into() }
     }
+
+    /// Returns true if the interface is a point-to-point interface.
+    pub fn is_p2p(&self) -> bool {
+        let if_type = unsafe { (*self.0).IfType };
+
+        if_type == 23 /* IF_TYPE_PPP */
+            || if_type == 131 /* IF_TYPE_TUNNEL */
+    }
 }
 
 pub struct IfAddrs {
