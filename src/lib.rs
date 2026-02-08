@@ -94,6 +94,11 @@ pub struct Interface {
     /// Whether the interface is operational up.
     pub oper_status: IfOperStatus,
 
+    /// Whether the interface is point to point.
+    /// On Linux, this is derived from the IFF_POINTOPOINT flag.
+    /// On Windows, this is derived from the interface type.
+    pub is_p2p: bool,
+
     /// (Windows only) A permanent and unique identifier for the interface. It
     /// cannot be modified by the user. It is typically a GUID string of the
     /// form: "{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}", but this is not
@@ -125,6 +130,12 @@ impl Interface {
     #[must_use]
     pub fn is_oper_up(&self) -> bool {
         self.oper_status == IfOperStatus::Up
+    }
+
+    /// Check whether this interface is point-to-point.
+    #[must_use]
+    pub fn is_p2p(&self) -> bool {
+        self.is_p2p
     }
 }
 
@@ -241,6 +252,11 @@ mod getifaddrs_posix {
     #[cfg(target_os = "illumos")]
     const POSIX_IFF_RUNNING: u64 = 0x40; // 1<<6
 
+    #[cfg(not(target_os = "illumos"))]
+    const POSIX_IFF_POINTOPOINT: u32 = 0x10; // 1<<4
+    #[cfg(target_os = "illumos")]
+    const POSIX_IFF_POINTOPOINT: u64 = 0x10; // 1<<4
+
     /// Return a vector of IP details for all the valid interfaces on this host.
     #[allow(unsafe_code)]
     pub fn get_if_addrs() -> io::Result<Vec<Interface>> {
@@ -324,11 +340,14 @@ mod getifaddrs_posix {
                 IfOperStatus::Unknown
             };
 
+            let is_p2p = ifaddr.ifa_flags & POSIX_IFF_POINTOPOINT != 0;
+
             ret.push(Interface {
                 name,
                 addr,
                 index,
                 oper_status,
+                is_p2p,
             });
         }
 
@@ -471,6 +490,7 @@ mod getifaddrs_windows {
                     IfAddr::V6(_) => ifaddr.ipv6_index(),
                 };
                 let oper_status = ifaddr.oper_status();
+                let is_p2p = ifaddr.is_p2p();
 
                 ret.push(Interface {
                     name: ifaddr.name(),
@@ -478,6 +498,7 @@ mod getifaddrs_windows {
                     index,
                     oper_status,
                     adapter_name: ifaddr.adapter_name(),
+                    is_p2p,
                 });
             }
         }
@@ -632,6 +653,13 @@ mod tests {
     use std::thread;
     use std::time::Duration;
 
+    #[derive(Debug)]
+    struct IntfStatus {
+        name: String,
+        is_up: bool,
+        is_p2p: bool,
+    }
+
     fn list_system_interfaces(cmd: &str, args: &[&str]) -> String {
         let start_cmd = if args.is_empty() {
             Command::new(cmd).stdout(Stdio::piped()).spawn()
@@ -664,8 +692,8 @@ mod tests {
     }
 
     #[cfg(windows)]
-    /// Returns (IP-addr-list, IPv4-interface-status-list)
-    fn list_system_addrs() -> (Vec<IpAddr>, Vec<(String, bool)>) {
+    /// Returns (IP-addr-list, interface-status-list)
+    fn list_system_addrs() -> (Vec<IpAddr>, Vec<IntfStatus>) {
         use std::net::Ipv6Addr;
         let intf_list = list_system_interfaces("ipconfig", &[""]);
         let ipaddr_list = intf_list
@@ -685,41 +713,78 @@ mod tests {
             .collect();
 
         /* An example on Windows:
-           > netsh interface ipv4 show interfaces
+           > netsh interface show interface
 
-           Idx     Met         MTU          State                Name
-           ---  ----------  ----------  ------------  ---------------------------
-           1          75  4294967295  connected     Loopback Pseudo-Interface 1
-           17          35        1500  connected     Wi-Fi
-           13          25        1500  disconnected  Local Area Connection* 1
-           14          25        1500  disconnected  Local Area Connection* 2
-           12          65        1500  disconnected  Bluetooth Network Connection
+           Admin State    State          Type             Interface Name
+           -------------------------------------------------------------------------
+           Enabled        Connected      Dedicated        Wi-Fi
+           Enabled        Connected      Dedicated        Ethernet
+           Disabled       Disconnected   Dedicated        Local Area Connection* 1
+           Enabled        Connected      Loopback         Loopback Pseudo-Interface 1
         */
-        let netsh_list =
-            list_system_interfaces("netsh", &["interface", "ipv4", "show", "interfaces"]);
+        let netsh_list = list_system_interfaces("netsh", &["interface", "show", "interface"]);
 
-        let ipv4_status_vec: Vec<_> = netsh_list
-            .lines()
-            .filter_map(|line| {
-                if !line.contains("Idx") && !line.contains("---") && !line.is_empty() {
-                    let columns: Vec<&str> = line.split_whitespace().collect();
-                    let status = columns[3].trim().to_string();
-                    let is_up = status == "connected";
+        let mut intf_status_vec = Vec::new();
+        let mut state_col = 0usize;
+        let mut type_col = 0usize;
+        let mut name_col = 0usize;
+        let mut found_header = false;
+        let mut found_separator = false;
 
-                    // concat the strings in columns[4] and beyond
-                    let intf_name = columns[4..].join(" ");
-                    return Some((intf_name, is_up));
+        for line in netsh_list.lines() {
+            if !found_header {
+                if line.contains("Type") && line.contains("Interface Name") {
+                    type_col = line.find("Type").unwrap();
+                    name_col = line.find("Interface Name").unwrap();
+                    // Find standalone "State" column (not the "State" inside "Admin State")
+                    let after_admin = line
+                        .find("Admin State")
+                        .map(|p| p + "Admin State".len())
+                        .unwrap_or(0);
+                    if let Some(offset) = line[after_admin..].find("State") {
+                        state_col = after_admin + offset;
+                    }
+                    found_header = true;
                 }
-                None
-            })
-            .collect();
+                continue;
+            }
 
-        (ipaddr_list, ipv4_status_vec)
+            if !found_separator {
+                if line.contains("---") {
+                    found_separator = true;
+                }
+                continue;
+            }
+
+            if line.is_empty() || line.len() <= name_col {
+                continue;
+            }
+
+            let state = line.get(state_col..type_col).unwrap_or("").trim();
+            let type_str = line.get(type_col..name_col).unwrap_or("").trim();
+            let name = line.get(name_col..).unwrap_or("").trim();
+
+            if name.is_empty() {
+                continue;
+            }
+
+            let is_up = state.eq_ignore_ascii_case("connected");
+            let type_lower = type_str.to_lowercase();
+            let is_p2p = type_lower == "tunnel" || type_lower == "ppp";
+
+            intf_status_vec.push(IntfStatus {
+                name: name.to_string(),
+                is_up,
+                is_p2p,
+            });
+        }
+
+        (ipaddr_list, intf_status_vec)
     }
 
     #[cfg(any(target_os = "linux", target_os = "android"))]
     /// Returns (IP-addr-list, interface-status-list)
-    fn list_system_addrs() -> (Vec<IpAddr>, Vec<(String, bool)>) {
+    fn list_system_addrs() -> (Vec<IpAddr>, Vec<IntfStatus>) {
         let intf_list = list_system_interfaces("ip", &["addr"]);
         let ipaddr_list = intf_list
             .lines()
@@ -738,7 +803,12 @@ mod tests {
             if !line.starts_with(' ') && !line.is_empty() {
                 let name_s: Vec<&str> = line.split(':').collect();
                 let is_up = !line.contains("state DOWN");
-                intf_status_vec.push((name_s[1].trim().to_string(), is_up));
+                let is_p2p = line.contains("POINTOPOINT");
+                intf_status_vec.push(IntfStatus {
+                    name: name_s[1].trim().to_string(),
+                    is_up,
+                    is_p2p,
+                });
             }
         }
 
@@ -762,7 +832,7 @@ mod tests {
         )
     ))]
     /// Returns (IP-addr-list, interface-status-list)
-    fn list_system_addrs() -> (Vec<IpAddr>, Vec<(String, bool)>) {
+    fn list_system_addrs() -> (Vec<IpAddr>, Vec<IntfStatus>) {
         let intf_list = list_system_interfaces("ifconfig", &[""]);
         let ipaddr_list = intf_list
             .lines()
@@ -792,10 +862,16 @@ mod tests {
             if !line.starts_with('\t') && !line.is_empty() {
                 let name_s: Vec<&str> = line.split(':').collect();
                 let is_admin_up = line.contains("<UP");
-                intf_status_vec.push((name_s[0].to_string(), is_admin_up));
+                let is_p2p = line.contains("POINTOPOINT");
+                let status = IntfStatus {
+                    name: name_s[0].to_string(),
+                    is_up: is_admin_up,
+                    is_p2p,
+                };
+                intf_status_vec.push(status);
             } else if line.contains("status: inactive") {
                 if let Some(current_intf) = intf_status_vec.last_mut() {
-                    current_intf.1 = false; // overwrite the admin up
+                    current_intf.is_up = false; // overwrite the admin up
                 }
             }
         }
@@ -844,16 +920,26 @@ mod tests {
         }
 
         println!("Interface status list: {:#?}", intf_status_list);
-        for (intf_name, is_up) in intf_status_list {
+        for intf_status in intf_status_list {
             for interface in &ifaces {
-                if interface.name == intf_name {
-                    if interface.is_oper_up() != is_up {
+                if interface.name == intf_status.name {
+                    if interface.is_oper_up() != intf_status.is_up {
                         println!(
                             "Interface {} status mismatch: listed {}, detected {:?}",
-                            intf_name, is_up, interface.oper_status
+                            intf_status.name, intf_status.is_up, interface.oper_status
                         );
                     }
-                    assert_eq!(interface.is_oper_up(), is_up);
+                    assert_eq!(interface.is_oper_up(), intf_status.is_up);
+
+                    if interface.is_p2p() != intf_status.is_p2p {
+                        println!(
+                            "Interface {} P2P status mismatch: listed {}, detected {}",
+                            intf_status.name,
+                            intf_status.is_p2p,
+                            interface.is_p2p()
+                        );
+                    }
+                    assert_eq!(interface.is_p2p(), intf_status.is_p2p);
                 }
             }
         }
