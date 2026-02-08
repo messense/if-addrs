@@ -784,7 +784,7 @@ mod tests {
 
     #[cfg(any(target_os = "linux", target_os = "android"))]
     /// Returns (IP-addr-list, interface-status-list)
-    fn list_system_addrs() -> (Vec<IpAddr>, Vec<(String, bool)>) {
+    fn list_system_addrs() -> (Vec<IpAddr>, Vec<IntfStatus>) {
         let intf_list = list_system_interfaces("ip", &["addr"]);
         let ipaddr_list = intf_list
             .lines()
@@ -803,7 +803,12 @@ mod tests {
             if !line.starts_with(' ') && !line.is_empty() {
                 let name_s: Vec<&str> = line.split(':').collect();
                 let is_up = !line.contains("state DOWN");
-                intf_status_vec.push((name_s[1].trim().to_string(), is_up));
+                let is_p2p = line.contains("POINTOPOINT");
+                intf_status_vec.push(IntfStatus {
+                    name: name_s[1].trim().to_string(),
+                    is_up,
+                    is_p2p,
+                });
             }
         }
 
