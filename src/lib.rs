@@ -81,6 +81,54 @@ impl From<i32> for IfOperStatus {
     }
 }
 
+/// A 48-bit (6-byte) hardware (MAC) address of an interface.
+///
+/// This is obtained directly from the operating system's interface
+/// enumeration APIs (`getifaddrs` on POSIX systems, `GetAdaptersAddresses`
+/// on Windows), so it does not require reading from `/sys` or any other
+/// platform-specific location.
+///
+/// Only 6-byte (Ethernet/EUI-48 style) addresses are represented. Interfaces
+/// whose hardware address has a different length (for example InfiniBand) are
+/// reported as `None` on the owning [`Interface`].
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord)]
+pub struct MacAddr(pub [u8; 6]);
+
+impl MacAddr {
+    /// Returns the six octets that make up this address.
+    #[must_use]
+    pub const fn octets(&self) -> [u8; 6] {
+        self.0
+    }
+
+    /// Returns `true` if all octets are zero.
+    ///
+    /// Loopback and some virtual interfaces commonly report an all-zero
+    /// hardware address.
+    #[must_use]
+    pub const fn is_zero(&self) -> bool {
+        let o = self.0;
+        o[0] == 0 && o[1] == 0 && o[2] == 0 && o[3] == 0 && o[4] == 0 && o[5] == 0
+    }
+}
+
+impl From<[u8; 6]> for MacAddr {
+    fn from(octets: [u8; 6]) -> Self {
+        MacAddr(octets)
+    }
+}
+
+impl std::fmt::Display for MacAddr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let o = self.0;
+        write!(
+            f,
+            "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+            o[0], o[1], o[2], o[3], o[4], o[5]
+        )
+    }
+}
+
 /// Details about an interface on this host.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Interface {
@@ -98,6 +146,17 @@ pub struct Interface {
     /// On Linux, this is derived from the IFF_POINTOPOINT flag.
     /// On Windows, this is derived from the interface type.
     pub is_p2p: bool,
+
+    /// The hardware (MAC) address of the interface, if available.
+    ///
+    /// This is sourced from the same OS interface-enumeration call used for
+    /// the IP information (`getifaddrs` link-layer entries on POSIX,
+    /// `GetAdaptersAddresses` on Windows), keeping the crate cross-platform
+    /// without reaching into `/sys` or other platform-specific locations.
+    ///
+    /// It is `None` when the OS reports no hardware address for the interface
+    /// or when the address is not a 6-byte address (see [`MacAddr`]).
+    pub mac_addr: Option<MacAddr>,
 
     /// (Windows only) A permanent and unique identifier for the interface. It
     /// cannot be modified by the user. It is typically a GUID string of the
@@ -136,6 +195,12 @@ impl Interface {
     #[must_use]
     pub fn is_p2p(&self) -> bool {
         self.is_p2p
+    }
+
+    /// Get the hardware (MAC) address of this interface, if available.
+    #[must_use]
+    pub fn mac_addr(&self) -> Option<MacAddr> {
+        self.mac_addr
     }
 }
 
@@ -237,10 +302,11 @@ impl Ifv6Addr {
 mod getifaddrs_posix {
     use libc::if_nametoindex;
 
-    use super::{IfAddr, Ifv4Addr, Ifv6Addr, Interface};
+    use super::{IfAddr, Ifv4Addr, Ifv6Addr, Interface, MacAddr};
     use crate::posix::{self as ifaddrs, IfAddrs};
     use crate::sockaddr;
     use crate::IfOperStatus;
+    use std::collections::HashMap;
     use std::ffi::CStr;
     use std::io;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -262,6 +328,21 @@ mod getifaddrs_posix {
     pub fn get_if_addrs() -> io::Result<Vec<Interface>> {
         let mut ret = Vec::<Interface>::new();
         let ifaddrs = IfAddrs::new()?;
+
+        // `getifaddrs` returns the hardware (MAC) address on a separate
+        // link-layer entry (`AF_PACKET` on Linux, `AF_LINK` on the BSDs/Apple)
+        // from the per-address `AF_INET`/`AF_INET6` entries. Collect those
+        // link-layer addresses first, keyed by interface name, so they can be
+        // attached to each address entry below.
+        let mut macs = HashMap::<String, MacAddr>::new();
+        for ifaddr in ifaddrs.iter() {
+            if let Some(mac) = sockaddr::to_mac(ifaddr.ifa_addr) {
+                let name = unsafe { CStr::from_ptr(ifaddr.ifa_name) }
+                    .to_string_lossy()
+                    .into_owned();
+                macs.insert(name, MacAddr(mac));
+            }
+        }
 
         for ifaddr in ifaddrs.iter() {
             let addr = match sockaddr::to_ipaddr(ifaddr.ifa_addr) {
@@ -342,12 +423,15 @@ mod getifaddrs_posix {
 
             let is_p2p = ifaddr.ifa_flags & POSIX_IFF_POINTOPOINT != 0;
 
+            let mac_addr = macs.get(&name).copied();
+
             ret.push(Interface {
                 name,
                 addr,
                 index,
                 oper_status,
                 is_p2p,
+                mac_addr,
             });
         }
 
@@ -363,7 +447,7 @@ pub fn get_if_addrs() -> io::Result<Vec<Interface>> {
 
 #[cfg(windows)]
 mod getifaddrs_windows {
-    use super::{IfAddr, Ifv4Addr, Ifv6Addr, Interface};
+    use super::{IfAddr, Ifv4Addr, Ifv6Addr, Interface, MacAddr};
     use crate::sockaddr;
     use crate::windows::IfAddrs;
     use std::io;
@@ -491,6 +575,7 @@ mod getifaddrs_windows {
                 };
                 let oper_status = ifaddr.oper_status();
                 let is_p2p = ifaddr.is_p2p();
+                let mac_addr = ifaddr.mac_addr().map(MacAddr);
 
                 ret.push(Interface {
                     name: ifaddr.name(),
@@ -499,6 +584,7 @@ mod getifaddrs_windows {
                     oper_status,
                     adapter_name: ifaddr.adapter_name(),
                     is_p2p,
+                    mac_addr,
                 });
             }
         }
@@ -662,6 +748,7 @@ mod tests {
         name: String,
         is_up: bool,
         is_p2p: bool,
+        mac: Option<String>,
     }
 
     fn list_system_interfaces(cmd: &str, args: &[&str]) -> String {
@@ -780,6 +867,7 @@ mod tests {
                 name: name.to_string(),
                 is_up,
                 is_p2p,
+                mac: None,
             });
         }
 
@@ -802,7 +890,7 @@ mod tests {
                 None
             })
             .collect();
-        let mut intf_status_vec = Vec::new();
+        let mut intf_status_vec: Vec<IntfStatus> = Vec::new();
         for line in intf_list.lines() {
             if !line.starts_with(' ') && !line.is_empty() {
                 let name_s: Vec<&str> = line.split(':').collect();
@@ -812,7 +900,15 @@ mod tests {
                     name: name_s[1].trim().to_string(),
                     is_up,
                     is_p2p,
+                    mac: None,
                 });
+            } else if let Some(rest) = line.trim().strip_prefix("link/ether ") {
+                // e.g. "link/ether 02:fc:00:00:00:01 brd ff:ff:ff:ff:ff:ff"
+                if let Some(mac) = rest.split_whitespace().next() {
+                    if let Some(current) = intf_status_vec.last_mut() {
+                        current.mac = Some(mac.to_lowercase());
+                    }
+                }
             }
         }
 
@@ -871,11 +967,19 @@ mod tests {
                     name: name_s[0].to_string(),
                     is_up: is_admin_up,
                     is_p2p,
+                    mac: None,
                 };
                 intf_status_vec.push(status);
             } else if line.contains("status: inactive") {
                 if let Some(current_intf) = intf_status_vec.last_mut() {
                     current_intf.is_up = false; // overwrite the admin up
+                }
+            } else if let Some(rest) = line.trim().strip_prefix("ether ") {
+                // e.g. "ether c6:0e:5e:f8:5d:f4"
+                if let Some(mac) = rest.split_whitespace().next() {
+                    if let Some(current_intf) = intf_status_vec.last_mut() {
+                        current_intf.mac = Some(mac.to_lowercase());
+                    }
                 }
             }
         }
@@ -944,9 +1048,39 @@ mod tests {
                         );
                     }
                     assert_eq!(interface.is_p2p(), intf_status.is_p2p);
+
+                    // When the system tool reports a MAC for this interface,
+                    // the crate must report the same one. Asserting `Some`
+                    // here (rather than silently skipping when `mac_addr()` is
+                    // `None`) catches a regression where the crate fails to
+                    // retrieve a MAC that the OS does expose.
+                    if let Some(expected_mac) = &intf_status.mac {
+                        let mac = interface.mac_addr().unwrap_or_else(|| {
+                            panic!(
+                                "interface {} has MAC {} per the system tool, \
+                                 but the crate reported none",
+                                intf_status.name, expected_mac
+                            )
+                        });
+                        assert_eq!(&mac.to_string(), expected_mac);
+                    }
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_mac_addr_display() {
+        use super::MacAddr;
+        let mac = MacAddr([0x02, 0xfc, 0x00, 0x0a, 0xbc, 0xff]);
+        assert_eq!(mac.to_string(), "02:fc:00:0a:bc:ff");
+        assert_eq!(mac.octets(), [0x02, 0xfc, 0x00, 0x0a, 0xbc, 0xff]);
+        assert!(!mac.is_zero());
+        assert!(MacAddr([0; 6]).is_zero());
+        assert_eq!(
+            MacAddr::from([1, 2, 3, 4, 5, 6]),
+            MacAddr([1, 2, 3, 4, 5, 6])
+        );
     }
 
     #[cfg(not(any(

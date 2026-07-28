@@ -24,6 +24,84 @@ pub fn to_ipaddr(sockaddr: *const sockaddr) -> Option<IpAddr> {
     SockAddr::new(sockaddr)?.as_ipaddr()
 }
 
+/// Extract a 6-byte hardware (MAC) address from a link-layer `sockaddr`, if it
+/// is one.
+///
+/// On Linux/Android the link-layer address is carried in a `sockaddr_ll`
+/// (`AF_PACKET`); on the BSDs, Apple platforms and illumos it is carried in a
+/// `sockaddr_dl` (`AF_LINK`). Returns `None` for non-link-layer addresses or
+/// for hardware addresses that are not 6 bytes long.
+#[cfg(not(windows))]
+#[allow(unsafe_code, clippy::cast_ptr_alignment, clippy::needless_return)]
+pub fn to_mac(sockaddr: *const sockaddr) -> Option<[u8; 6]> {
+    let sa = SockAddr::new(sockaddr)?;
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    {
+        if sa.sa_family() != libc::AF_PACKET as u32 {
+            return None;
+        }
+        let sll = unsafe { &*(sa.inner.as_ptr() as *const libc::sockaddr_ll) };
+        if sll.sll_halen != 6 {
+            return None;
+        }
+        let a = sll.sll_addr;
+        return Some([a[0], a[1], a[2], a[3], a[4], a[5]]);
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    {
+        if sa.sa_family() != libc::AF_LINK as u32 {
+            return None;
+        }
+        let sdl = unsafe { &*(sa.inner.as_ptr() as *const libc::sockaddr_dl) };
+        if sdl.sdl_alen != 6 {
+            return None;
+        }
+        // `sockaddr_dl` is a variable-length structure: the interface name
+        // (`sdl_nlen` bytes) is followed by the link-layer address
+        // (`sdl_alen` bytes) starting at `sdl_data`. `sdl_data` is only a
+        // fixed-size minimum work area in libc (e.g. `[c_char; 12]` on Apple),
+        // so a name of 6+ bytes (e.g. "bridge0") pushes the MAC past that
+        // array's compile-time bound. Read it via pointer arithmetic from the
+        // start of `sdl_data` instead of relying on `sdl_data.len()`.
+        let start = sdl.sdl_nlen as usize;
+        let sdl_ptr = sdl as *const libc::sockaddr_dl as *const u8;
+        let data_offset = unsafe {
+            std::ptr::addr_of!(sdl.sdl_data)
+                .cast::<u8>()
+                .offset_from(sdl_ptr)
+        } as usize;
+
+        // On the BSDs and Apple platforms the structure carries its own byte
+        // length in `sdl_len`; use it to bound the read. illumos/Solaris
+        // `sockaddr_dl` has no `sdl_len` field, so it is excluded here and
+        // relies on `getifaddrs` having populated `sdl_nlen + sdl_alen` bytes.
+        #[cfg(any(
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "tvos",
+            target_os = "watchos",
+            target_os = "visionos",
+            target_os = "freebsd",
+            target_os = "netbsd",
+            target_os = "openbsd",
+            target_os = "dragonfly",
+        ))]
+        {
+            if (sdl.sdl_len as usize) < data_offset + start + 6 {
+                return None;
+            }
+        }
+
+        let mut mac = [0u8; 6];
+        unsafe {
+            std::ptr::copy_nonoverlapping(sdl_ptr.add(data_offset + start), mac.as_mut_ptr(), 6);
+        }
+        return Some(mac);
+    }
+}
+
 // Wrapper around a sockaddr pointer. Guaranteed to not be null.
 struct SockAddr {
     inner: NonNull<sockaddr>,
