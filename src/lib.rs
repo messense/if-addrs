@@ -8,6 +8,10 @@
 // Software.
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+#[cfg(target_os = "android")]
+mod android;
+#[cfg(any(target_os = "android", all(test, target_os = "linux")))]
+mod netlink;
 #[cfg(not(windows))]
 mod posix;
 #[cfg(all(

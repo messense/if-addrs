@@ -7,8 +7,12 @@
 // specific language governing permissions and limitations relating to use of the SAFE Network
 // Software.
 
+#[cfg(target_os = "android")]
+use crate::android::{freeifaddrs, getifaddrs};
 use crate::sockaddr;
-use libc::{freeifaddrs, getifaddrs, ifaddrs};
+use libc::ifaddrs;
+#[cfg(not(target_os = "android"))]
+use libc::{freeifaddrs, getifaddrs};
 use std::net::IpAddr;
 use std::{io, mem};
 
