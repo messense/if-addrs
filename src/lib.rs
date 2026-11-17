@@ -23,6 +23,7 @@ mod posix;
         )
     )),
     not(target_os = "freebsd"),
+    not(target_os = "dragonfly"),
     not(target_os = "netbsd"),
     not(target_os = "openbsd"),
     not(target_os = "illumos"),
@@ -525,6 +526,7 @@ pub fn get_if_addrs() -> io::Result<Vec<Interface>> {
         )
     ),
     target_os = "freebsd",
+    target_os = "dragonfly",
     target_os = "netbsd",
     target_os = "openbsd",
     target_os = "illumos",
@@ -535,6 +537,7 @@ pub fn get_if_addrs() -> io::Result<Vec<Interface>> {
     doc(cfg(any(
         not(target_vendor = "apple"),
         not(target_os = "freebsd"),
+        not(target_os = "dragonfly"),
         not(target_os = "netbsd"),
         not(target_os = "openbsd"),
         not(target_os = "illumos"),
@@ -629,6 +632,7 @@ mod if_change_notifier {
         )
     ),
     target_os = "freebsd",
+    target_os = "dragonfly",
     target_os = "netbsd",
     target_os = "openbsd",
     target_os = "illumos",
@@ -639,6 +643,7 @@ mod if_change_notifier {
     doc(cfg(any(
         not(target_vendor = "apple"),
         not(target_os = "freebsd"),
+        not(target_os = "dragonfly"),
         not(target_os = "netbsd"),
         not(target_os = "openbsd"),
         not(target_os = "illumos"),
@@ -821,6 +826,7 @@ mod tests {
 
     #[cfg(any(
         target_os = "freebsd",
+        target_os = "dragonfly",
         target_os = "netbsd",
         target_os = "openbsd",
         target_os = "illumos",
@@ -961,6 +967,7 @@ mod tests {
             )
         ),
         target_os = "freebsd",
+        target_os = "dragonfly",
         target_os = "netbsd",
         target_os = "openbsd",
         target_os = "illumos"
