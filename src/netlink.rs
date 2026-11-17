@@ -12,6 +12,7 @@ use libc::{
     AF_INET, AF_INET6, AF_NETLINK, NETLINK_ROUTE, SOCK_CLOEXEC, SOCK_DGRAM, SOCK_RAW,
 };
 use std::{
+    cell::Cell,
     collections::HashMap,
     ffi::{CStr, CString},
     io, mem,
@@ -24,6 +25,7 @@ const NLMSG_HDR_LEN: usize = 16;
 const NLMSG_ERROR: u16 = 2;
 const NLMSG_DONE: u16 = 3;
 const NLM_F_REQUEST: u16 = 0x01;
+const NLM_F_DUMP_INTR: u16 = 0x10;
 const NLM_F_DUMP: u16 = 0x100 | 0x200; // NLM_F_ROOT | NLM_F_MATCH
 
 const RTM_NEWLINK: u16 = 16;
@@ -46,6 +48,10 @@ const IFF_BROADCAST: u32 = 0x2;
 const SIOCGIFFLAGS: u32 = 0x8913;
 
 const RECV_BUFFER_LEN: usize = 64 * 1024;
+
+/// How many times to try dumping the links and addresses before giving up if the dumps keep
+/// getting interrupted (see [`Socket::dump`]).
+const MAX_DUMP_ATTEMPTS: usize = 3;
 
 /// Node of the `ifaddrs` linked list together with the storage its pointers point into.
 #[repr(C)]
@@ -79,29 +85,52 @@ pub fn getifaddrs() -> io::Result<*mut ifaddrs> {
 
 fn getifaddrs_with(dump_links: bool) -> io::Result<*mut ifaddrs> {
     let socket = Socket::new()?;
+
+    for _ in 0..MAX_DUMP_ATTEMPTS {
+        if let Some(head) = dump_list(&socket, dump_links)? {
+            return Ok(head);
+        }
+    }
+
+    // The interfaces kept changing while we were dumping them.
+    Err(io::Error::from_raw_os_error(libc::EAGAIN))
+}
+
+/// Dumps the links (if `dump_links` is true) and addresses and builds the list from them. Returns
+/// `None` if any of the dumps was interrupted, in which case the partial results are discarded.
+fn dump_list(socket: &Socket, dump_links: bool) -> io::Result<Option<*mut ifaddrs>> {
     let mut links = HashMap::new();
     let mut nodes = Vec::new();
 
     if dump_links {
-        // Failure is not fatal: the names and flags of any links we don't know about are resolved
-        // in `parse_addr`. Any leftover responses to this request are skipped by `dump` thanks to
-        // the sequence number.
-        let _ = socket.dump(RTM_GETLINK, &[0; IFINFOMSG_LEN], |msg_type, payload| {
+        let result = socket.dump(RTM_GETLINK, &[0; IFINFOMSG_LEN], |msg_type, payload| {
             if msg_type == RTM_NEWLINK {
                 if let Some((index, link)) = parse_link(payload) {
                     links.insert(index, link);
                 }
             }
         });
+
+        match result {
+            Ok(true) => (),
+            Ok(false) => return Ok(None),
+            // Failure is not fatal: the names and flags of any links we don't know about are
+            // resolved in `parse_addr`.
+            Err(_) => (),
+        }
     }
 
-    socket.dump(RTM_GETADDR, &[0; IFADDRMSG_LEN], |msg_type, payload| {
+    let consistent = socket.dump(RTM_GETADDR, &[0; IFADDRMSG_LEN], |msg_type, payload| {
         if msg_type == RTM_NEWADDR {
             if let Some(node) = parse_addr(payload, &links) {
                 nodes.push(node);
             }
         }
     })?;
+
+    if !consistent {
+        return Ok(None);
+    }
 
     let mut head: *mut ifaddrs = ptr::null_mut();
 
@@ -110,7 +139,7 @@ fn getifaddrs_with(dump_links: bool) -> io::Result<*mut ifaddrs> {
         head = Box::into_raw(node).cast();
     }
 
-    Ok(head)
+    Ok(Some(head))
 }
 
 /// Frees the list returned from [`getifaddrs`].
@@ -355,7 +384,12 @@ const fn align(len: usize) -> usize {
     (len + 3) & !3
 }
 
-struct Socket(OwnedFd);
+struct Socket {
+    fd: OwnedFd,
+    // Sequence number of the last request. Used to tell responses to different requests apart (to
+    // skip any leftovers from a previous request that failed midway).
+    seq: Cell<u32>,
+}
 
 impl Socket {
     #[allow(unsafe_code)]
@@ -365,16 +399,22 @@ impl Socket {
         if fd < 0 {
             Err(io::Error::last_os_error())
         } else {
-            Ok(Self(unsafe { OwnedFd::from_raw_fd(fd) }))
+            Ok(Self {
+                fd: unsafe { OwnedFd::from_raw_fd(fd) },
+                seq: Cell::new(0),
+            })
         }
     }
 
     /// Sends a dump request of the given type and invokes `f` with the type and payload of every
     /// message in the response.
-    fn dump(&self, msg_type: u16, body: &[u8], mut f: impl FnMut(u16, &[u8])) -> io::Result<()> {
-        // Use the request type as the sequence number to tell responses to different requests
-        // apart.
-        let seq = u32::from(msg_type);
+    ///
+    /// Returns whether the dump is consistent. If the data changes while it's being dumped, the
+    /// kernel marks the messages with `NLM_F_DUMP_INTR`. In that case the results may be incomplete
+    /// or contain duplicates and `false` is returned.
+    fn dump(&self, msg_type: u16, body: &[u8], mut f: impl FnMut(u16, &[u8])) -> io::Result<bool> {
+        let seq = self.seq.get().wrapping_add(1);
+        self.seq.set(seq);
 
         let mut request = Vec::with_capacity(NLMSG_HDR_LEN + body.len());
         request.extend_from_slice(&((NLMSG_HDR_LEN + body.len()) as u32).to_ne_bytes());
@@ -387,6 +427,7 @@ impl Socket {
         self.send(&request)?;
 
         let mut buf = vec![0; RECV_BUFFER_LEN];
+        let mut consistent = true;
 
         loop {
             let len = self.recv(&mut buf)?;
@@ -396,38 +437,8 @@ impl Socket {
                 return Err(io::ErrorKind::UnexpectedEof.into());
             }
 
-            let mut msgs = &buf[..len];
-
-            while msgs.len() >= NLMSG_HDR_LEN {
-                let msg_len = u32::from_ne_bytes(msgs[0..4].try_into().unwrap()) as usize;
-                let msg_type = u16::from_ne_bytes(msgs[4..6].try_into().unwrap());
-                let msg_seq = u32::from_ne_bytes(msgs[8..12].try_into().unwrap());
-
-                if msg_len < NLMSG_HDR_LEN || msg_len > msgs.len() {
-                    return Err(io::Error::from_raw_os_error(libc::EBADMSG));
-                }
-
-                let payload = &msgs[NLMSG_HDR_LEN..msg_len];
-                msgs = &msgs[align(msg_len).min(msgs.len())..];
-
-                if msg_seq != seq {
-                    continue;
-                }
-
-                match msg_type {
-                    NLMSG_DONE => return Ok(()),
-                    NLMSG_ERROR => {
-                        let error = payload
-                            .get(0..4)
-                            .map(|b| i32::from_ne_bytes(b.try_into().unwrap()))
-                            .ok_or_else(|| io::Error::from_raw_os_error(libc::EBADMSG))?;
-
-                        if error != 0 {
-                            return Err(io::Error::from_raw_os_error(-error));
-                        }
-                    }
-                    _ => f(msg_type, payload),
-                }
+            if parse_messages(&buf[..len], seq, &mut consistent, &mut f)? {
+                return Ok(consistent);
             }
         }
     }
@@ -437,7 +448,7 @@ impl Socket {
         loop {
             let res = unsafe {
                 libc::send(
-                    self.0.as_raw_fd(),
+                    self.fd.as_raw_fd(),
                     buf.as_ptr() as *const c_void,
                     buf.len(),
                     0,
@@ -460,7 +471,7 @@ impl Socket {
         loop {
             let res = unsafe {
                 libc::recv(
-                    self.0.as_raw_fd(),
+                    self.fd.as_raw_fd(),
                     buf.as_mut_ptr() as *mut c_void,
                     buf.len(),
                     0,
@@ -477,6 +488,68 @@ impl Socket {
             }
         }
     }
+}
+
+/// Parses the netlink messages in `msgs` and invokes `f` with the type and payload of each one that
+/// belongs to the request with the given sequence number. Clears `consistent` if any of them is
+/// marked with `NLM_F_DUMP_INTR`. Returns whether the end of the dump (`NLMSG_DONE`) was reached.
+fn parse_messages(
+    mut msgs: &[u8],
+    seq: u32,
+    consistent: &mut bool,
+    f: &mut impl FnMut(u16, &[u8]),
+) -> io::Result<bool> {
+    while msgs.len() >= NLMSG_HDR_LEN {
+        let msg_len = u32::from_ne_bytes(msgs[0..4].try_into().unwrap()) as usize;
+        let msg_type = u16::from_ne_bytes(msgs[4..6].try_into().unwrap());
+        let msg_flags = u16::from_ne_bytes(msgs[6..8].try_into().unwrap());
+        let msg_seq = u32::from_ne_bytes(msgs[8..12].try_into().unwrap());
+
+        if msg_len < NLMSG_HDR_LEN || msg_len > msgs.len() {
+            return Err(io::Error::from_raw_os_error(libc::EBADMSG));
+        }
+
+        let payload = &msgs[NLMSG_HDR_LEN..msg_len];
+        msgs = &msgs[align(msg_len).min(msgs.len())..];
+
+        if msg_seq != seq {
+            continue;
+        }
+
+        if msg_flags & NLM_F_DUMP_INTR != 0 {
+            *consistent = false;
+        }
+
+        match msg_type {
+            NLMSG_DONE => {
+                // The payload is the status of the dump: 0 on success, negative errno on failure.
+                let status = parse_status(payload).unwrap_or(0);
+
+                return if status < 0 {
+                    Err(io::Error::from_raw_os_error(-status))
+                } else {
+                    Ok(true)
+                };
+            }
+            NLMSG_ERROR => {
+                let error = parse_status(payload)
+                    .ok_or_else(|| io::Error::from_raw_os_error(libc::EBADMSG))?;
+
+                if error != 0 {
+                    return Err(io::Error::from_raw_os_error(-error));
+                }
+            }
+            _ => f(msg_type, payload),
+        }
+    }
+
+    Ok(false)
+}
+
+fn parse_status(payload: &[u8]) -> Option<i32> {
+    payload
+        .get(0..4)
+        .map(|b| i32::from_ne_bytes(b.try_into().unwrap()))
 }
 
 #[cfg(test)]
@@ -548,6 +621,95 @@ mod tests {
         unsafe { libc_freeifaddrs(expected) };
 
         assert_eq!(actual_entries, expected_entries);
+    }
+
+    fn message(msg_type: u16, flags: u16, seq: u32, payload: &[u8]) -> Vec<u8> {
+        let len = NLMSG_HDR_LEN + payload.len();
+
+        let mut msg = Vec::new();
+        msg.extend_from_slice(&(len as u32).to_ne_bytes());
+        msg.extend_from_slice(&msg_type.to_ne_bytes());
+        msg.extend_from_slice(&flags.to_ne_bytes());
+        msg.extend_from_slice(&seq.to_ne_bytes());
+        msg.extend_from_slice(&0u32.to_ne_bytes());
+        msg.extend_from_slice(payload);
+        msg.resize(align(len), 0);
+        msg
+    }
+
+    fn parse(msgs: &[u8]) -> (io::Result<bool>, bool, Vec<u16>) {
+        let mut consistent = true;
+        let mut types = Vec::new();
+        let result = parse_messages(msgs, 1, &mut consistent, &mut |msg_type, _| {
+            types.push(msg_type)
+        });
+
+        (result, consistent, types)
+    }
+
+    #[test]
+    fn parse_messages_done() {
+        let msgs = [
+            message(RTM_NEWADDR, 0, 1, &[0; 8]),
+            message(RTM_NEWADDR, 0, 2, &[0; 8]), // different request, skipped
+            message(NLMSG_DONE, 0, 1, &0i32.to_ne_bytes()),
+        ]
+        .concat();
+
+        let (result, consistent, types) = parse(&msgs);
+        assert!(result.unwrap());
+        assert!(consistent);
+        assert_eq!(types, [RTM_NEWADDR]);
+    }
+
+    #[test]
+    fn parse_messages_not_done() {
+        let msgs = message(RTM_NEWADDR, 0, 1, &[0; 8]);
+
+        let (result, consistent, types) = parse(&msgs);
+        assert!(!result.unwrap());
+        assert!(consistent);
+        assert_eq!(types, [RTM_NEWADDR]);
+    }
+
+    #[test]
+    fn parse_messages_interrupted() {
+        let msgs = [
+            message(RTM_NEWADDR, NLM_F_DUMP_INTR, 1, &[0; 8]),
+            message(NLMSG_DONE, 0, 1, &0i32.to_ne_bytes()),
+        ]
+        .concat();
+
+        let (result, consistent, _) = parse(&msgs);
+        assert!(result.unwrap());
+        assert!(!consistent);
+
+        // The flag can also be only on the `NLMSG_DONE` message.
+        let msgs = [
+            message(RTM_NEWADDR, 0, 1, &[0; 8]),
+            message(NLMSG_DONE, NLM_F_DUMP_INTR, 1, &0i32.to_ne_bytes()),
+        ]
+        .concat();
+
+        let (result, consistent, _) = parse(&msgs);
+        assert!(result.unwrap());
+        assert!(!consistent);
+    }
+
+    #[test]
+    fn parse_messages_done_with_error() {
+        let msgs = message(NLMSG_DONE, 0, 1, &(-libc::EBUSY).to_ne_bytes());
+
+        let (result, _, _) = parse(&msgs);
+        assert_eq!(result.unwrap_err().raw_os_error(), Some(libc::EBUSY));
+    }
+
+    #[test]
+    fn parse_messages_error() {
+        let msgs = message(NLMSG_ERROR, 0, 1, &(-libc::EPERM).to_ne_bytes());
+
+        let (result, _, _) = parse(&msgs);
+        assert_eq!(result.unwrap_err().raw_os_error(), Some(libc::EPERM));
     }
 
     #[test]
