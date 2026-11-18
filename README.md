@@ -12,6 +12,22 @@ for iface in if_addrs::get_if_addrs().unwrap() {
 }
 ```
 
+Each `Interface` includes its IP address, index, operational status, whether it
+is point-to-point, and its hardware (MAC) address when available:
+
+```rust
+for iface in if_addrs::get_if_addrs().unwrap() {
+    if let Some(mac) = iface.mac_addr() {
+        println!("{}: {}", iface.name, mac); // e.g. "eth0: 02:fc:00:00:00:01"
+    }
+}
+```
+
+The MAC address is read from the same OS interface-enumeration call used for the
+IP information (`getifaddrs` link-layer entries on POSIX, `GetAdaptersAddresses`
+on Windows), so it stays cross-platform without reaching into `/sys` or other
+platform-specific locations.
+
 Get notifications for changes in network interfaces:
 
 ```rust

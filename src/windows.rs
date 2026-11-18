@@ -89,6 +89,19 @@ impl IpAdapterAddresses {
         if_type == 23 /* IF_TYPE_PPP */
             || if_type == 131 /* IF_TYPE_TUNNEL */
     }
+
+    /// Returns the 6-byte hardware (MAC) address of the interface, if it has
+    /// one. Adapters whose physical address is not 6 bytes long (e.g.
+    /// loopback or tunnels with a zero-length address) return `None`.
+    #[allow(unsafe_code)]
+    pub fn mac_addr(&self) -> Option<[u8; 6]> {
+        let len = unsafe { (*self.0).PhysicalAddressLength } as usize;
+        if len != 6 {
+            return None;
+        }
+        let a = unsafe { (*self.0).PhysicalAddress };
+        Some([a[0], a[1], a[2], a[3], a[4], a[5]])
+    }
 }
 
 pub struct IfAddrs {
